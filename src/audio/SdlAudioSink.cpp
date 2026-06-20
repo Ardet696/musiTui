@@ -66,12 +66,12 @@ bool SdlAudioSink::open(const AudioFormat& fmt, FrameProvider provider, const st
     return true;
 }
 
-void SdlAudioSink::start() const {
+void SdlAudioSink::start() {
     if (!open_) return;
     SDL_PauseAudioDevice(static_cast<SDL_AudioDeviceID>(device_), 0);
 }
 
-void SdlAudioSink::stop() const {
+void SdlAudioSink::stop() {
     if (!open_) return;
     SDL_PauseAudioDevice(static_cast<SDL_AudioDeviceID>(device_), 1);
 }
@@ -126,7 +126,7 @@ void SdlAudioSink::sdlCallback(void* userdata, std::uint8_t* stream, const int l
     static_cast<SdlAudioSink*>(userdata)->fill(stream, len);
 }
 
-void SdlAudioSink::fill(std::uint8_t* stream, const int len) const {
+void SdlAudioSink::fill(std::uint8_t* stream, const int len) {
     const std::size_t bytesPerFrame = sizeof(int16_t) * static_cast<std::size_t>(fmt_.channels);
     const std::size_t framesRequested = static_cast<std::size_t>(len) / bytesPerFrame;
 

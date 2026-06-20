@@ -40,7 +40,7 @@ public:
 
 private:
     static void sdlCallback(void* userdata, std::uint8_t* stream, int len);
-    void fill(std::uint8_t* stream, int len) const;
+    void fill(std::uint8_t* stream, int len);
 
     SdlAudioSubsystem audio_;
     std::uintptr_t device_ = 0; // SDL_AudioDeviceID stored portably
@@ -48,7 +48,7 @@ private:
     FrameProvider provider_{};
     bool open_ = false;
     std::atomic<int> volume_{100}; // 0-100
-    mutable std::vector<std::uint8_t> mixBuffer_;
+    std::vector<std::uint8_t> mixBuffer_;
     NotificationBus* bus_;
 };
 
