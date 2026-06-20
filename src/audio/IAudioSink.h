@@ -15,8 +15,8 @@ public:
     virtual ~IAudioSink() = default;
 
     virtual bool open(const AudioFormat& fmt, FrameProvider provider, const std::string& deviceName = "", int desiredBufferFrames = 2048) = 0;
-    virtual void start() const = 0;
-    virtual void stop() const = 0;
+    virtual void start() = 0;
+    virtual void stop() = 0;
     virtual void close() = 0;
     virtual bool isOpen() const = 0;
 

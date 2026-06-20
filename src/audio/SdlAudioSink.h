@@ -27,8 +27,8 @@ public:
     SdlAudioSink& operator=(SdlAudioSink&&) = delete;
 
     bool open(const AudioFormat& fmt, FrameProvider provider, const std::string& deviceName = "", int desiredBufferFrames = 2048) override;
-    void start() const override;
-    void stop() const override;
+    void start() override;
+    void stop() override;
     void close() override;
     bool isOpen() const override;
 
