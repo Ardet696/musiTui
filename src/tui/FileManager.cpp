@@ -34,6 +34,10 @@ ftxui::Component CreateFileManager(ILibraryQuery& query, IPlaybackControl& contr
   auto songs_per_album = std::make_shared<std::vector<std::vector<std::string>>>(
     query.getAllSongNames()
   );
+  auto album_loaded = std::make_shared<std::vector<bool>>(
+    query.getAlbumLoadedStates()
+  );
+  auto last_version = std::make_shared<std::uint32_t>(query.getDataVersion());
 
   auto selected_album = std::make_shared<int>(0);
   auto selected_song  = std::make_shared<int>(0);
@@ -45,8 +49,10 @@ ftxui::Component CreateFileManager(ILibraryQuery& query, IPlaybackControl& contr
   );
 
   auto albumOpt = MenuOption();
-  albumOpt.entries_option.transform = [](const EntryState& state) {
-    auto label = text("\u25B8 " + state.label); 
+  albumOpt.entries_option.transform = [album_loaded](const EntryState& state) {
+    const bool loaded = state.index < (int)album_loaded->size()
+                          ? (*album_loaded)[state.index] : true;
+    auto label = text("\u25B8 " + state.label + (loaded ? "" : "  \u27F3"));
     if (state.focused) {
       return label | bold | inverted;
     }
@@ -98,12 +104,26 @@ ftxui::Component CreateFileManager(ILibraryQuery& query, IPlaybackControl& contr
     if (*reload_flag) {
       *albums = query.getAlbumNames();
       *songs_per_album = query.getAllSongNames();
+      *album_loaded = query.getAlbumLoadedStates();
       *current_songs = albums->empty() ? std::vector<std::string>{} : (*songs_per_album)[0];
       *selected_album = 0;
       *selected_song = 0;
       *viewing_songs = false;
       *tab_index = 0;
+      *last_version = query.getDataVersion();
       *reload_flag = false;
+    } else if (std::uint32_t v = query.getDataVersion(); v != *last_version) {
+      *albums = query.getAlbumNames();
+      *songs_per_album = query.getAllSongNames();
+      *album_loaded = query.getAlbumLoadedStates();
+      if (*selected_album >= (int)albums->size())
+        *selected_album = albums->empty() ? 0 : (int)albums->size() - 1;
+      if (*viewing_songs && !albums->empty()) {
+        *current_songs = (*songs_per_album)[*selected_album];
+        if (*selected_song >= (int)current_songs->size())
+          *selected_song = current_songs->empty() ? 0 : (int)current_songs->size() - 1;
+      }
+      *last_version = v;
     }
 
     Element content;
