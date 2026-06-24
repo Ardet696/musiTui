@@ -19,6 +19,22 @@ int MusicLibrary::getTotalSongs() const {
     return total;
 }
 
+void MusicLibrary::replaceAlbum(int index, Album album) {
+    if (index < 0 || index >= static_cast<int>(albums_.size())) {
+        return;
+    }
+    albums_[index] = std::move(album);
+}
+
+std::vector<std::filesystem::path> MusicLibrary::getAlbumPaths() const {
+    std::vector<std::filesystem::path> paths;
+    paths.reserve(albums_.size());
+    for (const auto& album : albums_) {
+        paths.push_back(album.getPath());
+    }
+    return paths;
+}
+
 const Album* MusicLibrary::getAlbumByIndex(int index) const {
     if (index < 0 || index >= static_cast<int>(albums_.size())) {
         return nullptr;

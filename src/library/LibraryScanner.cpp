@@ -53,7 +53,7 @@ MusicLibrary LibraryScanner::scanRoot(const std::filesystem::path& rootDir) cons
             }
         } else {
             try {
-                Album album(dirPath);
+                Album album(dirPath, Album::SkeletonTag{});
                 library.addAlbum(std::move(album));
             } catch (const std::exception&) {
             }

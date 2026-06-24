@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <filesystem>
 #include "Album.h"
 #include "Playlist.h"
 
@@ -19,6 +20,9 @@ public:
     int getNumAlbums() const { return static_cast<int>(albums_.size()); }
     int getNumPlaylists() const { return static_cast<int>(playlists_.size()); }
     int getTotalSongs() const;
+
+    void replaceAlbum(int index, Album album);
+    std::vector<std::filesystem::path> getAlbumPaths() const;
 
     const Album* getAlbumByIndex(int index) const;
     const Playlist* getPlaylistByIndex(int index) const;
