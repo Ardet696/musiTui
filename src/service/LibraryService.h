@@ -7,6 +7,7 @@
 #include "../player/PlaybackController.h"
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <shared_mutex>
 #include <thread>
 #include <vector>
@@ -57,6 +58,7 @@ private:
     PlaybackController& controller_;
     NotificationBus& bus_;
 
+    std::mutex loadControlMutex_;  // serializes stop/swap/start across setRootPath callers
     std::vector<std::thread> loaders_;
     std::atomic<bool> cancelLoad_{false};
     std::atomic<int> nextAlbum_{0};

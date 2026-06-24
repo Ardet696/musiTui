@@ -7,6 +7,7 @@ LibraryService::LibraryService(MusicLibrary& library, PlaybackController& contro
     : library_(library), controller_(controller), bus_(bus) {}
 
 LibraryService::~LibraryService() {
+    std::lock_guard control(loadControlMutex_);
     stopBackgroundLoad();
 }
 
@@ -65,6 +66,7 @@ bool LibraryService::setRootPath(const std::string& path, std::string& outError)
         return false;
     }
 
+    std::lock_guard control(loadControlMutex_);
     stopBackgroundLoad();
 
     {
