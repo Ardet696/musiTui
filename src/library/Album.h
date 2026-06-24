@@ -15,7 +15,13 @@ public:
         StudioAlbum
     };
 
+    struct SkeletonTag {};
+
     explicit Album(const std::filesystem::path& dirPath);
+    Album(const std::filesystem::path& dirPath, SkeletonTag);
+
+    void load();
+    bool isLoaded() const { return loaded_; }
 
     std::string getTitle() const { return title_; }
     std::string getArtist() const { return artist_; }
@@ -43,6 +49,7 @@ private:
     std::string artist_;
     AlbumType type_;
     std::vector<Song> songs_;
+    bool loaded_ = false;
 };
 
 #endif

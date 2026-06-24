@@ -2,13 +2,23 @@
 #include <algorithm>
 
 Album::Album(const std::filesystem::path& dirPath)
+    : Album(dirPath, SkeletonTag{})
+{
+    load();
+}
+
+Album::Album(const std::filesystem::path& dirPath, SkeletonTag)
     : dirPath_(dirPath)
     , title_(dirPath.filename().string())  // Directory name as album title
     , artist_("Unknown")
     , type_(AlbumType::Single)
 {
+}
+
+void Album::load() {
     loadSongsFromDirectory();
     type_ = classifyByNumSongs(static_cast<int>(songs_.size()));
+    loaded_ = true;
 }
 
 void Album::loadSongsFromDirectory() {
