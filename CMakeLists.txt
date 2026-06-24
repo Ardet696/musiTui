@@ -97,20 +97,17 @@ else()
     set(MP3PLAYER_SDL2_TARGET PkgConfig::SDL2)
 endif()
 
-add_executable(MP3Player
-    src/main.cpp
-    src/tui/ui.cpp
-    src/tui/FileManager.cpp
-    src/tui/ScreenRefreshTimer.cpp
-    src/tui/VisualsBase.cpp
-    src/tui/Visuals.cpp
-    src/tui/VisualsMirrored.cpp
-    src/tui/VisualsRolling.cpp
-    src/tui/VisualsCircular.cpp
-    src/tui/VisualsPanel.cpp
-    src/tui/PlayingBar.cpp
-    src/tui/UserInputs.cpp
+function(mp3player_configure target)
+    target_compile_features(${target} PRIVATE cxx_std_20)
+    set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
+    target_compile_options(${target} PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic>
+        # Security hardening (non-debug builds parse untrusted MP3 input)
+        $<$<AND:$<CXX_COMPILER_ID:GNU,Clang,AppleClang>,$<NOT:$<CONFIG:Debug>>>:-fstack-protector-strong;-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=2>
+    )
+endfunction()
 
+add_library(mp3player_core STATIC
     src/library/AlbumInfo.cpp
     src/library/LibraryScanner.cpp
     src/library/Playlist.cpp
@@ -142,20 +139,32 @@ add_executable(MP3Player
     src/service/AsyncLibraryService.cpp
     src/commands/CommandQueue.cpp
 )
+mp3player_configure(mp3player_core)
+target_link_libraries(mp3player_core PUBLIC ${MP3PLAYER_SDL2_TARGET})
 
-target_compile_features(MP3Player PRIVATE cxx_std_20)
-set_target_properties(MP3Player PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
-target_compile_options(MP3Player PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic>
-    # Security hardening (non-debug builds parse untrusted MP3 input)
-    $<$<AND:$<CXX_COMPILER_ID:GNU,Clang,AppleClang>,$<NOT:$<CONFIG:Debug>>>:-fstack-protector-strong;-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=2>
+add_executable(MP3Player
+    src/main.cpp
+    src/App.cpp
+    src/tui/ui.cpp
+    src/tui/FileManager.cpp
+    src/tui/ScreenRefreshTimer.cpp
+    src/tui/VisualsBase.cpp
+    src/tui/Visuals.cpp
+    src/tui/VisualsMirrored.cpp
+    src/tui/VisualsRolling.cpp
+    src/tui/VisualsCircular.cpp
+    src/tui/VisualsPanel.cpp
+    src/tui/PlayingBar.cpp
+    src/tui/UserInputs.cpp
 )
+
+mp3player_configure(MP3Player)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(MP3Player PRIVATE -pie -Wl,-z,relro,-z,now)
 endif()
 
-target_link_libraries(MP3Player PRIVATE ${MP3PLAYER_SDL2_TARGET})
 target_link_libraries(MP3Player PRIVATE
+    mp3player_core
     ftxui-component
     ftxui-dom
     ftxui-screen
@@ -175,26 +184,6 @@ if(BUILD_TESTING)
         GIT_TAG v3.7.1
     )
     FetchContent_MakeAvailable(Catch2)
-
-    add_library(mp3player_core STATIC
-        src/decode/Fft.cpp
-        src/decode/SpectrumAnalyzer.cpp
-        src/decode/BpmDetector.cpp
-        src/decode/Mp3Decoder.cpp
-        src/util/PathValidator.cpp
-        src/util/DirectoryWatcher.cpp
-        src/service/ConfigService.cpp
-        src/events/PlaybackEventPublisher.cpp
-        src/player/DecodeThread.cpp
-        src/player/AutoAdvanceManager.cpp
-        src/player/SongQueue.cpp
-        src/commands/CommandQueue.cpp
-        src/audio/SdlAudioSink.cpp
-        src/audio/SdlAudioSubsystem.cpp
-    )
-    target_compile_features(mp3player_core PUBLIC cxx_std_20)
-    set_target_properties(mp3player_core PROPERTIES CXX_EXTENSIONS OFF)
-    target_link_libraries(mp3player_core PUBLIC ${MP3PLAYER_SDL2_TARGET})
 
     add_executable(unit_tests
         tests/unit/RingBufferTest.cpp
