@@ -1,8 +1,14 @@
 #include "LibraryService.h"
+#include "../events/NotificationBus.h"
+#include <algorithm>
 #include <shared_mutex>
 
 LibraryService::LibraryService(MusicLibrary& library, PlaybackController& controller, NotificationBus& bus)
     : library_(library), controller_(controller), bus_(bus) {}
+
+LibraryService::~LibraryService() {
+    stopBackgroundLoad();
+}
 
 NotificationBus& LibraryService::getNotificationBus() { return bus_; }
 
@@ -13,6 +19,19 @@ std::vector<std::string> LibraryService::getAlbumNames() const {
         names.push_back(album.getTitle());
     }
     return names;
+}
+
+std::vector<bool> LibraryService::getAlbumLoadedStates() const {
+    std::shared_lock lock(mutex_);
+    std::vector<bool> states;
+    for (const auto& album : library_.getAlbums()) {
+        states.push_back(album.isLoaded());
+    }
+    return states;
+}
+
+std::uint32_t LibraryService::getDataVersion() const {
+    return dataVersion_.load();
 }
 
 std::vector<std::string> LibraryService::getSongNames(const std::string& albumName) const {
@@ -45,9 +64,62 @@ bool LibraryService::setRootPath(const std::string& path, std::string& outError)
     if (!outError.empty()) {
         return false;
     }
-    std::lock_guard lock(mutex_);
-    library_ = std::move(newLibrary);
+
+    stopBackgroundLoad();
+
+    {
+        std::lock_guard lock(mutex_);
+        library_ = std::move(newLibrary);
+    }
+    dataVersion_.fetch_add(1);
+
+    startBackgroundLoad();
     return true;
+}
+
+void LibraryService::startBackgroundLoad() {
+    std::vector<std::filesystem::path> paths;
+    {
+        std::shared_lock lock(mutex_);
+        paths = library_.getAlbumPaths();
+    }
+    if (paths.empty()) {
+        return;
+    }
+
+    bus_.push("Tip: keep albums small for a faster launch");
+
+    cancelLoad_.store(false);
+    nextAlbum_.store(0);
+
+    const unsigned hw = std::thread::hardware_concurrency();
+    const unsigned workerCount = std::min<unsigned>(
+        paths.size(), std::clamp<unsigned>(hw, 2u, 4u));
+
+    auto sharedPaths = std::make_shared<std::vector<std::filesystem::path>>(std::move(paths));
+    for (unsigned w = 0; w < workerCount; ++w) {
+        loaders_.emplace_back([this, sharedPaths] {
+            const int total = static_cast<int>(sharedPaths->size());
+            for (int i = nextAlbum_.fetch_add(1); i < total; i = nextAlbum_.fetch_add(1)) {
+                if (cancelLoad_.load()) return;
+                Album full((*sharedPaths)[i]);  // heavy decode, off-lock
+                if (cancelLoad_.load()) return;
+                {
+                    std::lock_guard lock(mutex_);
+                    library_.replaceAlbum(i, std::move(full));
+                }
+                dataVersion_.fetch_add(1);
+            }
+        });
+    }
+}
+
+void LibraryService::stopBackgroundLoad() {
+    cancelLoad_.store(true);
+    for (auto& t : loaders_) {
+        if (t.joinable()) t.join();
+    }
+    loaders_.clear();
 }
 
 void LibraryService::playSong(const std::string& albumName, int songIndex) {
@@ -56,6 +128,11 @@ void LibraryService::playSong(const std::string& albumName, int songIndex) {
         std::shared_lock lock(mutex_);
         const auto* album = library_.findAlbumByTitle(albumName);
         if (!album) return;
+
+        if (!album->isLoaded()) {
+            bus_.push("Album still loading…");
+            return;
+        }
 
         const auto& songs = album->getSongs();
         if (songIndex < 0 || songIndex >= static_cast<int>(songs.size())) return;

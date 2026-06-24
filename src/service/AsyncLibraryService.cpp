@@ -40,6 +40,14 @@ std::vector<std::string> AsyncLibraryService::getAlbumNames() const {
     return real_.getAlbumNames();
 }
 
+std::vector<bool> AsyncLibraryService::getAlbumLoadedStates() const {
+    return real_.getAlbumLoadedStates();
+}
+
+std::uint32_t AsyncLibraryService::getDataVersion() const {
+    return real_.getDataVersion();
+}
+
 std::vector<std::string> AsyncLibraryService::getSongNames(const std::string& album) const {
     return real_.getSongNames(album);
 }

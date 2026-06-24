@@ -20,6 +20,8 @@ public:
     bool setRootPath(const std::string& path, std::string& outError) override;
 
     std::vector<std::string> getAlbumNames() const override;
+    std::vector<bool> getAlbumLoadedStates() const override;
+    std::uint32_t getDataVersion() const override;
     std::vector<std::string> getSongNames(const std::string& album) const override;
     std::vector<std::vector<std::string>> getAllSongNames() const override;
     std::vector<float> getSpectrumBars() const override;
