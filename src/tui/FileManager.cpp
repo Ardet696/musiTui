@@ -52,7 +52,7 @@ ftxui::Component CreateFileManager(ILibraryQuery& query, IPlaybackControl& contr
   albumOpt.entries_option.transform = [album_loaded](const EntryState& state) {
     const bool loaded = state.index < (int)album_loaded->size()
                           ? (*album_loaded)[state.index] : true;
-    auto label = text("\u25B8 " + state.label + (loaded ? "" : "  \u27F3"));
+    auto label = text("- " + state.label + (loaded ? "" : " - loading"));
     if (state.focused) {
       return label | bold | inverted;
     }
