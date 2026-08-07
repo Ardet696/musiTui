@@ -204,6 +204,7 @@ if(BUILD_TESTING)
         tests/unit/ThreadLifecycleTest.cpp
         tests/unit/SdlAudioSinkTest.cpp
         tests/unit/AsyncLibraryLoadTest.cpp
+        tests/unit/OutputDeviceSwitchTest.cpp
     )
     target_link_libraries(unit_tests PRIVATE Catch2::Catch2WithMain mp3player_core)
     target_compile_features(unit_tests PRIVATE cxx_std_20)

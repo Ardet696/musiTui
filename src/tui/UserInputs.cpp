@@ -239,9 +239,9 @@ ftxui::Component CreateUserInputs(ILibraryService& service, IConfigService& conf
        }
 
        if (selection >= 1 && selection <= static_cast<int>(cached_devices->size())) {
-         int deviceIndex = selection - 1;
-         service.setOutputDevice(deviceIndex);
-         addMsg("Output: " + truncateDeviceName((*cached_devices)[deviceIndex]), MsgType::System);
+         // Result is reported through the notification bus: the switch is
+         // asynchronous and may be rejected if the device cannot be opened.
+         service.setOutputDevice(selection - 1);
        } else {
          addMsg("Invalid [1.." + std::to_string(cached_devices->size()) + "]", MsgType::Error);
        }

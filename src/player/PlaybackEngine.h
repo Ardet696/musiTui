@@ -63,15 +63,20 @@ public:
     void setVolume(int percent);  // 0-100
     int  getVolume() const;
 
-    void setOutputDevice(const std::string& deviceName);
+    // Returns false and keeps the current (working) device if the requested one
+    // cannot be opened. Never tears down active playback on failure.
+    bool setOutputDevice(const std::string& deviceName);
     std::string getOutputDevice() const;
 
     static std::vector<std::string> listOutputDevices();
 
 private:
+    using FrameProvider = std::function<std::size_t(int16_t*, std::size_t)>;
 
     bool startPlayback();
     void stopPlayback();
+    FrameProvider makeAudioProvider();
+    std::string deviceLabel(const std::string& name) const;
 
     DecoderFactory decoderFactory_;
     SinkFactory sinkFactory_;

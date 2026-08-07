@@ -216,6 +216,7 @@ std::vector<std::string> LibraryService::listOutputDevices() const {
 void LibraryService::setOutputDevice(int deviceIndex) {
     auto devices = PlaybackController::listOutputDevices();
     if (deviceIndex < 0 || deviceIndex >= static_cast<int>(devices.size())) {
+        bus_.push("Output device no longer available", NotifyLevel::Error);
         return;
     }
     controller_.setOutputDevice(devices[deviceIndex]);

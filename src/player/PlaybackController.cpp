@@ -206,17 +206,10 @@ int PlaybackController::getVolume() const {
     return engine_.getVolume();
 }
 
-void PlaybackController::setOutputDevice(const std::string& deviceName) {
-    engine_.setOutputDevice(deviceName);
-
-    // If currently playing, reload the current song through the new device
-    const auto currentSong = queue_.getCurrentSongPath();
-    if (!currentSong.empty() && !engine_.isStopped()) {
-        engine_.stop();
-        if (engine_.load(currentSong)) {
-            engine_.play();
-        }
-    }
+bool PlaybackController::setOutputDevice(const std::string& deviceName) {
+    // The engine hot-swaps the sink in place, so playback keeps its position
+    // and a device that cannot be opened leaves the current one running.
+    return engine_.setOutputDevice(deviceName);
 }
 
 std::string PlaybackController::getOutputDevice() const {

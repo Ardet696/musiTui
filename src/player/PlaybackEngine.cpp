@@ -60,32 +60,25 @@ bool PlaybackEngine::load(const std::filesystem::path& mp3File) {
     fmt.sampleRate = sampleRate_;
     fmt.channels = channels_;
 
-    auto audioProvider = [this](int16_t* dst, std::size_t framesRequested) -> std::size_t {
-        const std::size_t samplesRequested = framesRequested * channels_;
-        const std::size_t samplesRead = ringBuffer_->read(dst, samplesRequested);
-        const std::size_t framesRead = samplesRead / channels_;
-
-        if (framesRead == 0) {
-            silentCallbacks_.fetch_add(1, std::memory_order_relaxed);
-        } else {
-            silentCallbacks_.store(0, std::memory_order_relaxed);
-            samplesPlayed_.fetch_add(samplesRead, std::memory_order_relaxed);
-            spectrumAnalyzer_.feed(dst, samplesRead, channels_);
-            bpmDetector_.feed(dst, samplesRead, channels_, sampleRate_);
-        }
-
-        return framesRead;
-    };
-
     sink_ = sinkFactory_(bus_);
-    if (!sink_->open(fmt, audioProvider, outputDeviceName_)) {
-        if (bus_) bus_->push("Failed to open audio sink", NotifyLevel::Error);
-        decoder_->close();
-        decoder_.reset();
-        ringBuffer_.reset();
-        decodeThread_.reset();
-        sink_.reset();
-        return false;
+    if (!sink_->open(fmt, makeAudioProvider(), outputDeviceName_)) {
+        // The selected device disappeared (unpaired bluetooth, hot-unplug).
+        // Fall back to the system default instead of killing playback.
+        const bool recovered = !outputDeviceName_.empty()
+            && sink_->open(fmt, makeAudioProvider(), "");
+        if (recovered) {
+            if (bus_) bus_->push("Output '" + deviceLabel(outputDeviceName_)
+                                 + "' unavailable, using system default", NotifyLevel::Error);
+            outputDeviceName_.clear();
+        } else {
+            if (bus_) bus_->push("Failed to open audio sink", NotifyLevel::Error);
+            decoder_->close();
+            decoder_.reset();
+            ringBuffer_.reset();
+            decodeThread_.reset();
+            sink_.reset();
+            return false;
+        }
     }
 
     sink_->setVolume(volume_.load(std::memory_order_relaxed));
@@ -209,8 +202,83 @@ int PlaybackEngine::getVolume() const {
     return volume_.load(std::memory_order_relaxed);
 }
 
-void PlaybackEngine::setOutputDevice(const std::string& deviceName) {
+PlaybackEngine::FrameProvider PlaybackEngine::makeAudioProvider() {
+    return [this](int16_t* dst, std::size_t framesRequested) -> std::size_t {
+        const std::size_t samplesRequested = framesRequested * channels_;
+        const std::size_t samplesRead = ringBuffer_->read(dst, samplesRequested);
+        const std::size_t framesRead = samplesRead / channels_;
+
+        if (framesRead == 0) {
+            silentCallbacks_.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            silentCallbacks_.store(0, std::memory_order_relaxed);
+            samplesPlayed_.fetch_add(samplesRead, std::memory_order_relaxed);
+            spectrumAnalyzer_.feed(dst, samplesRead, channels_);
+            bpmDetector_.feed(dst, samplesRead, channels_, sampleRate_);
+        }
+
+        return framesRead;
+    };
+}
+
+std::string PlaybackEngine::deviceLabel(const std::string& name) const {
+    return name.empty() ? std::string("system default") : name;
+}
+
+bool PlaybackEngine::setOutputDevice(const std::string& deviceName) {
+    if (deviceName == outputDeviceName_) {
+        return true;
+    }
+
+    // Nothing loaded: probe the device so a broken selection is rejected now
+    // rather than at the next load().
+    if (!sink_) {
+        AudioFormat probeFmt;
+        probeFmt.sampleRate = sampleRate_ > 0 ? sampleRate_.load(std::memory_order_relaxed) : 44100;
+        probeFmt.channels = channels_ > 0 ? channels_.load(std::memory_order_relaxed) : 2;
+
+        auto probe = sinkFactory_(bus_);
+        const bool usable = probe && probe->open(
+            probeFmt,
+            [](int16_t*, std::size_t) -> std::size_t { return 0; },
+            deviceName);
+        if (!usable) {
+            if (bus_) bus_->push("Output '" + deviceLabel(deviceName) + "' unavailable, keeping "
+                                 + deviceLabel(outputDeviceName_), NotifyLevel::Error);
+            return false;
+        }
+        probe->close();
+        outputDeviceName_ = deviceName;
+        if (bus_) bus_->push("Output: " + deviceLabel(deviceName));
+        return true;
+    }
+
+    // Live swap: open the new device before touching the running one, so a
+    // failure leaves the current sink untouched and playback uninterrupted.
+    AudioFormat fmt;
+    fmt.sampleRate = sampleRate_.load(std::memory_order_relaxed);
+    fmt.channels = channels_.load(std::memory_order_relaxed);
+
+    auto newSink = sinkFactory_(bus_);
+    if (!newSink || !newSink->open(fmt, makeAudioProvider(), deviceName)) {
+        if (bus_) bus_->push("Output '" + deviceLabel(deviceName) + "' unavailable, keeping "
+                             + deviceLabel(outputDeviceName_), NotifyLevel::Error);
+        return false;
+    }
+
+    newSink->setVolume(volume_.load(std::memory_order_relaxed));
+
+    const bool wasPlaying = state_.load(std::memory_order_acquire) == State::Playing;
+    sink_->stop();
+    sink_->close();
+    sink_ = std::move(newSink);
+    if (wasPlaying) {
+        sink_->start();
+    }
+
     outputDeviceName_ = deviceName;
+    if (bus_) bus_->push("Output: " + deviceLabel(deviceName));
+    return true;
 }
 
 std::string PlaybackEngine::getOutputDevice() const {

@@ -62,7 +62,7 @@ public:
     int  getVolume() const;
 
     /// Set the preferred audio output device. Reloads the current song through the new device.
-    void setOutputDevice(const std::string& deviceName);
+    bool setOutputDevice(const std::string& deviceName);
     std::string getOutputDevice() const;
     static std::vector<std::string> listOutputDevices();
 
