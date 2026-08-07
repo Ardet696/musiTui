@@ -7,6 +7,14 @@
 
 #include "../events/NotificationBus.h"
 
+namespace {
+
+bool isSupportedSourceFormat(const AudioFormat& fmt) {
+    return fmt.sampleRate > 0 && (fmt.channels == 1 || fmt.channels == 2);
+}
+
+} // namespace
+
 SdlAudioSink::SdlAudioSink(NotificationBus* bus) : bus_(bus) {}
 
 SdlAudioSink::~SdlAudioSink() {
@@ -15,7 +23,7 @@ SdlAudioSink::~SdlAudioSink() {
 
 bool SdlAudioSink::open(const AudioFormat& fmt, FrameProvider provider, const std::string& deviceName, const int desiredBufferFrames) {
     close();
-    if (fmt.sampleRate <= 0 || (fmt.channels != 1 && fmt.channels != 2)) {
+    if (!isSupportedSourceFormat(fmt)) {
         if (bus_) bus_->push("Audio: invalid format", NotifyLevel::Error);
         return false;
     }
@@ -39,8 +47,13 @@ bool SdlAudioSink::open(const AudioFormat& fmt, FrameProvider provider, const st
 
     const char* sdlDeviceName = deviceName.empty() ? nullptr : deviceName.c_str();
 
+    // Let the device pick its own rate and channel count. Whatever it settles
+    // on becomes fixed for the lifetime of the device, and sources that do not
+    // match are resampled into it instead of forcing the device to reopen.
     SDL_AudioSpec obtained{};
-    const SDL_AudioDeviceID dev = SDL_OpenAudioDevice(sdlDeviceName, 0, &desired, &obtained, 0);
+    const SDL_AudioDeviceID dev = SDL_OpenAudioDevice(
+        sdlDeviceName, 0, &desired, &obtained,
+        SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
     if (dev == 0) {
         if (bus_) bus_->push(std::string("Audio device failed: ") + SDL_GetError(), NotifyLevel::Error);
         return false;
@@ -51,18 +64,81 @@ bool SdlAudioSink::open(const AudioFormat& fmt, FrameProvider provider, const st
         SDL_CloseAudioDevice(dev);
         return false;
     }
-
-    if (obtained.freq != desired.freq || obtained.channels != desired.channels) {
+    if (obtained.freq <= 0 || obtained.channels == 0) {
         if (bus_) bus_->push("Audio: format mismatch", NotifyLevel::Error);
         SDL_CloseAudioDevice(dev);
         return false;
     }
 
-    fmt_ = fmt;
-    provider_ = std::move(provider);
     device_ = static_cast<std::uintptr_t>(dev);
+    srcFmt_ = fmt;
+    deviceFmt_ = AudioFormat{obtained.freq, static_cast<int>(obtained.channels)};
+    provider_ = std::move(provider);
+    deviceBufferBytes_ = static_cast<int>(obtained.size);
     mixBuffer_.assign(obtained.size, 0);  // preallocate so fill() never allocates
     open_ = true;
+
+    if (!rebuildConverter()) {
+        close();
+        return false;
+    }
+    return true;
+}
+
+bool SdlAudioSink::setSourceFormat(const AudioFormat& fmt) {
+    if (!open_) return false;
+    if (!isSupportedSourceFormat(fmt)) {
+        if (bus_) bus_->push("Audio: invalid format", NotifyLevel::Error);
+        return false;
+    }
+
+    // The device keeps running; only the conversion in front of it is rebuilt.
+    // Locking is what makes the swap safe against an in-flight callback.
+    SDL_LockAudioDevice(static_cast<SDL_AudioDeviceID>(device_));
+    srcFmt_ = fmt;
+    const bool ok = rebuildConverter();
+    SDL_UnlockAudioDevice(static_cast<SDL_AudioDeviceID>(device_));
+
+    if (!ok && bus_) {
+        bus_->push("Audio: cannot convert to device format", NotifyLevel::Error);
+    }
+    return ok;
+}
+
+bool SdlAudioSink::rebuildConverter() {
+    if (converter_) {
+        SDL_FreeAudioStream(reinterpret_cast<SDL_AudioStream*>(converter_));
+        converter_ = nullptr;
+    }
+
+    const std::size_t deviceFrames = deviceFmt_.channels > 0
+        ? static_cast<std::size_t>(deviceBufferBytes_) / (sizeof(int16_t) * static_cast<std::size_t>(deviceFmt_.channels))
+        : 0;
+
+    if (srcFmt_ == deviceFmt_) {
+        // Fast path: provider writes straight into the device buffer.
+        srcFramesPerPull_ = deviceFrames;
+        srcBuffer_.clear();
+        srcBuffer_.shrink_to_fit();
+        return true;
+    }
+
+    converter_ = reinterpret_cast<_SDL_AudioStream*>(SDL_NewAudioStream(
+        AUDIO_S16SYS, static_cast<Uint8>(srcFmt_.channels), srcFmt_.sampleRate,
+        AUDIO_S16SYS, static_cast<Uint8>(deviceFmt_.channels), deviceFmt_.sampleRate));
+    if (!converter_) {
+        return false;
+    }
+
+    // One device buffer's worth of source audio, plus a frame of slack for the
+    // rounding in the rate ratio, so a single pull can always satisfy a callback.
+    const std::size_t framesPerPull = static_cast<std::size_t>(
+        (static_cast<std::uint64_t>(deviceFrames) * static_cast<std::uint64_t>(srcFmt_.sampleRate)
+         + static_cast<std::uint64_t>(deviceFmt_.sampleRate) - 1)
+        / static_cast<std::uint64_t>(deviceFmt_.sampleRate)) + 1;
+
+    srcFramesPerPull_ = framesPerPull;
+    srcBuffer_.assign(framesPerPull * static_cast<std::size_t>(srcFmt_.channels), 0);
     return true;
 }
 
@@ -79,9 +155,16 @@ void SdlAudioSink::stop() {
 void SdlAudioSink::close() {
     if (!open_) return;
     SDL_CloseAudioDevice(static_cast<SDL_AudioDeviceID>(device_));
+    if (converter_) {
+        SDL_FreeAudioStream(reinterpret_cast<SDL_AudioStream*>(converter_));
+        converter_ = nullptr;
+    }
     device_ = 0;
     provider_ = nullptr;
-    fmt_ = AudioFormat{};
+    srcFmt_ = AudioFormat{};
+    deviceFmt_ = AudioFormat{};
+    deviceBufferBytes_ = 0;
+    srcFramesPerPull_ = 0;
     open_ = false;
 }
 
@@ -127,17 +210,38 @@ void SdlAudioSink::sdlCallback(void* userdata, std::uint8_t* stream, const int l
 }
 
 void SdlAudioSink::fill(std::uint8_t* stream, const int len) {
-    const std::size_t bytesPerFrame = sizeof(int16_t) * static_cast<std::size_t>(fmt_.channels);
-    const std::size_t framesRequested = static_cast<std::size_t>(len) / bytesPerFrame;
+    std::size_t bytesWritten = 0;
 
-    auto* out = reinterpret_cast<int16_t*>(stream);
-    const std::size_t samplesRequested = framesRequested * static_cast<std::size_t>(fmt_.channels);
+    if (!converter_) {
+        const std::size_t bytesPerFrame = sizeof(int16_t) * static_cast<std::size_t>(deviceFmt_.channels);
+        const std::size_t framesRequested = bytesPerFrame > 0
+            ? static_cast<std::size_t>(len) / bytesPerFrame
+            : 0;
 
-    const std::size_t framesWritten = provider_ ? provider_(out, framesRequested) : 0;
-    const std::size_t samplesWritten = framesWritten * static_cast<std::size_t>(fmt_.channels);
+        auto* out = reinterpret_cast<int16_t*>(stream);
+        const std::size_t framesWritten = provider_ ? provider_(out, framesRequested) : 0;
+        bytesWritten = framesWritten * bytesPerFrame;
+    } else {
+        auto* converter = reinterpret_cast<SDL_AudioStream*>(converter_);
+        const std::size_t srcBytesPerFrame = sizeof(int16_t) * static_cast<std::size_t>(srcFmt_.channels);
 
-    if (samplesWritten < samplesRequested) {
-        std::memset(out + samplesWritten, 0, (samplesRequested - samplesWritten) * sizeof(int16_t));
+        while (SDL_AudioStreamAvailable(converter) < len) {
+            const std::size_t framesRead = provider_ ? provider_(srcBuffer_.data(), srcFramesPerPull_) : 0;
+            if (framesRead == 0) {
+                break; // starved: the tail of the callback pads with silence
+            }
+            if (SDL_AudioStreamPut(converter, srcBuffer_.data(),
+                                   static_cast<int>(framesRead * srcBytesPerFrame)) < 0) {
+                break;
+            }
+        }
+
+        const int got = SDL_AudioStreamGet(converter, stream, len);
+        bytesWritten = got > 0 ? static_cast<std::size_t>(got) : 0;
+    }
+
+    if (bytesWritten < static_cast<std::size_t>(len)) {
+        std::memset(stream + bytesWritten, 0, static_cast<std::size_t>(len) - bytesWritten);
     }
 
     // Apply volume scaling

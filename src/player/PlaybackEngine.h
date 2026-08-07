@@ -10,6 +10,7 @@
 #include <vector>
 #include "../decode/SpectrumAnalyzer.h"
 #include "../decode/BpmDetector.h"
+#include "../util/AudioFormat.h"
 
 class IAudioDecoder;
 class IAudioSink;
@@ -77,6 +78,10 @@ private:
     void stopPlayback();
     FrameProvider makeAudioProvider();
     std::string deviceLabel(const std::string& name) const;
+
+    // Opens the device on first use, then only re-points it at the new source.
+    bool prepareSink(const AudioFormat& fmt);
+    bool openSink(const AudioFormat& fmt);
 
     DecoderFactory decoderFactory_;
     SinkFactory sinkFactory_;

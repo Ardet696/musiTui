@@ -32,9 +32,9 @@ PlaybackEngine::~PlaybackEngine() {
 }
 
 bool PlaybackEngine::load(const std::filesystem::path& mp3File) {
-    if (state_.load(std::memory_order_acquire) != State::Stopped) {
-        stopPlayback();
-    }
+    // Tears down the source only. The sink stays open across tracks: a track
+    // change is a change of what we feed the device, not of the device itself.
+    stopPlayback();
 
     decoder_ = decoderFactory_();
     if (!decoder_->open(mp3File)) {
@@ -51,8 +51,13 @@ bool PlaybackEngine::load(const std::filesystem::path& mp3File) {
     samplesPlayed_.store(0, std::memory_order_release);
     bpmDetector_.reset();
 
-    const std::size_t ringBufferCapacity = Config::RING_BUFFER_SIZE_SECONDS * sampleRate_ * channels_;
-    ringBuffer_ = std::make_unique<RingBuffer<int16_t>>(ringBufferCapacity);
+    // Sized for the worst case once, so a track change never reallocates it and
+    // the provider's pointer to it stays valid for the life of the engine.
+    if (!ringBuffer_) {
+        ringBuffer_ = std::make_unique<RingBuffer<int16_t>>(
+            Config::RING_BUFFER_SIZE_SECONDS * Config::MAX_SAMPLE_RATE * Config::MAX_CHANNELS);
+    }
+    ringBuffer_->clear(); // safe: decode thread stopped and device paused
 
     decodeThread_ = std::make_unique<DecodeThread>();
 
@@ -60,29 +65,51 @@ bool PlaybackEngine::load(const std::filesystem::path& mp3File) {
     fmt.sampleRate = sampleRate_;
     fmt.channels = channels_;
 
-    sink_ = sinkFactory_(bus_);
-    if (!sink_->open(fmt, makeAudioProvider(), outputDeviceName_)) {
-        // The selected device disappeared (unpaired bluetooth, hot-unplug).
-        // Fall back to the system default instead of killing playback.
-        const bool recovered = !outputDeviceName_.empty()
-            && sink_->open(fmt, makeAudioProvider(), "");
-        if (recovered) {
-            if (bus_) bus_->push("Output '" + deviceLabel(outputDeviceName_)
-                                 + "' unavailable, using system default", NotifyLevel::Error);
-            outputDeviceName_.clear();
-        } else {
-            if (bus_) bus_->push("Failed to open audio sink", NotifyLevel::Error);
-            decoder_->close();
-            decoder_.reset();
-            ringBuffer_.reset();
-            decodeThread_.reset();
-            sink_.reset();
-            return false;
-        }
+    if (!prepareSink(fmt)) {
+        decoder_->close();
+        decoder_.reset();
+        decodeThread_.reset();
+        return false;
     }
 
     sink_->setVolume(volume_.load(std::memory_order_relaxed));
     state_.store(State::Stopped, std::memory_order_release);
+    return true;
+}
+
+bool PlaybackEngine::prepareSink(const AudioFormat& fmt) {
+    // Already have a working device: just re-point it. No close, no reopen, so
+    // nothing here can lose a device that takes time to re-acquire (bluetooth).
+    if (sink_ && sink_->isOpen() && sink_->setSourceFormat(fmt)) {
+        return true;
+    }
+
+    if (openSink(fmt)) {
+        return true;
+    }
+
+    if (bus_) bus_->push("Failed to open audio sink", NotifyLevel::Error);
+    sink_.reset();
+    return false;
+}
+
+bool PlaybackEngine::openSink(const AudioFormat& fmt) {
+    sink_ = sinkFactory_(bus_);
+    if (!sink_) return false;
+
+    if (sink_->open(fmt, makeAudioProvider(), outputDeviceName_)) {
+        return true;
+    }
+
+    // The selected device disappeared (unpaired bluetooth, hot-unplug).
+    // Fall back to the system default instead of killing playback.
+    if (outputDeviceName_.empty() || !sink_->open(fmt, makeAudioProvider(), "")) {
+        return false;
+    }
+
+    if (bus_) bus_->push("Output '" + deviceLabel(outputDeviceName_)
+                         + "' unavailable, using system default", NotifyLevel::Error);
+    outputDeviceName_.clear();
     return true;
 }
 
@@ -205,7 +232,7 @@ int PlaybackEngine::getVolume() const {
 PlaybackEngine::FrameProvider PlaybackEngine::makeAudioProvider() {
     return [this](int16_t* dst, std::size_t framesRequested) -> std::size_t {
         const std::size_t samplesRequested = framesRequested * channels_;
-        const std::size_t samplesRead = ringBuffer_->read(dst, samplesRequested);
+        const std::size_t samplesRead = ringBuffer_ ? ringBuffer_->read(dst, samplesRequested) : 0;
         const std::size_t framesRead = samplesRead / channels_;
 
         if (framesRead == 0) {
@@ -292,10 +319,10 @@ std::vector<std::string> PlaybackEngine::listOutputDevices() {
 void PlaybackEngine::stopPlayback() {
     // Must be called with mutex_ held
 
+    // Paused, not closed. Closing here is what used to force every track change
+    // to re-acquire the output device. The device is released in the destructor.
     if (sink_) {
         sink_->stop();
-        sink_->close();
-        sink_.reset();
     }
 
     if (decodeThread_) {
@@ -306,12 +333,14 @@ void PlaybackEngine::stopPlayback() {
         decoder_->close();
         decoder_.reset();
     }
-    ringBuffer_.reset();
+    if (ringBuffer_) {
+        ringBuffer_->clear(); // kept allocated, see load()
+    }
 
     state_.store(State::Stopped, std::memory_order_release);
     currentFile_.clear();
-    sampleRate_ = 0;
-    channels_ = 0;
     totalSamples_ = 0;
     samplesPlayed_.store(0, std::memory_order_release);
+    // sampleRate_/channels_ deliberately survive: they describe the format the
+    // still-open sink is configured for, which setOutputDevice() needs.
 }

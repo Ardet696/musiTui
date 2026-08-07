@@ -38,6 +38,7 @@ struct SinkState {
     std::vector<std::string> openedDevices;
     std::string rejectedDevice = "<none>"; // matches no real device name
     int liveSinks = 0;
+    int sourceFormatChanges = 0;
 };
 
 class FakeSink final : public IAudioSink {
@@ -54,6 +55,12 @@ public:
         open_ = true;
         ++state_.liveSinks;
         state_.openedDevices.push_back(deviceName);
+        return true;
+    }
+
+    bool setSourceFormat(const AudioFormat&) override {
+        if (!open_) return false;
+        ++state_.sourceFormatChanges;
         return true;
     }
 
@@ -145,6 +152,36 @@ TEST_CASE("Device selected while stopped is probed before being accepted") {
     REQUIRE(engine.setOutputDevice("Speakers"));
     CHECK(engine.getOutputDevice() == "Speakers");
     CHECK(state.liveSinks == 0);
+    bus.drain();
+}
+
+TEST_CASE("Changing tracks re-points the open device instead of reopening it") {
+    NotificationBus bus;
+    SinkState state;
+
+    PlaybackEngine engine = makeEngine(bus, state);
+    REQUIRE(engine.setOutputDevice("AirPods"));
+    REQUIRE(engine.load("first.mp3"));
+    engine.play();
+
+    // setOutputDevice() probes while stopped, so the device has been opened
+    // twice by now: once for the probe, once for playback.
+    const std::size_t opensBeforeTrackChanges = state.openedDevices.size();
+
+    // A device that only accepts one open — a bluetooth sink that needs time to
+    // be re-acquired is the real-world case — must survive a track change.
+    state.rejectedDevice = "AirPods";
+
+    for (int track = 0; track < 5; ++track) {
+        engine.stop();
+        REQUIRE(engine.load("next.mp3"));
+        engine.play();
+    }
+
+    CHECK(state.openedDevices.size() == opensBeforeTrackChanges); // never reopened
+    CHECK(state.sourceFormatChanges == 5);                        // only the source changed
+    CHECK(engine.getOutputDevice() == "AirPods");
+    CHECK(state.liveSinks == 1);
     bus.drain();
 }
 

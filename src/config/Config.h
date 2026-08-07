@@ -13,6 +13,9 @@ class Config {
 public:
     static constexpr int END_OF_STREAM_THRESHOLD = 5;
     static constexpr std::size_t RING_BUFFER_SIZE_SECONDS = 2;
+    // Worst case MP3 output, used to size the ring buffer once up front.
+    static constexpr std::size_t MAX_SAMPLE_RATE = 48000;
+    static constexpr std::size_t MAX_CHANNELS = 2;
     static constexpr std::size_t DECODE_CHUNK_FRAMES = 1152;
     static constexpr std::chrono::milliseconds DECODE_THREAD_SLEEP_MS{5};
     static constexpr int PRE_WARM_AHEAD_COUNT = 3;

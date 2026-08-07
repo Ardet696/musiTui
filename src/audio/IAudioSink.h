@@ -15,6 +15,12 @@ public:
     virtual ~IAudioSink() = default;
 
     virtual bool open(const AudioFormat& fmt, FrameProvider provider, const std::string& deviceName = "", int desiredBufferFrames = 2048) = 0;
+
+    /// Point the open device at a new source format and drop any audio still
+    /// queued from the previous source. Changing tracks goes through here: the
+    /// device itself is never closed, so playback never has to re-acquire it.
+    virtual bool setSourceFormat(const AudioFormat& fmt) = 0;
+
     virtual void start() = 0;
     virtual void stop() = 0;
     virtual void close() = 0;
