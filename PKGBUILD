@@ -1,20 +1,15 @@
 # Maintainer: ardet696 <https://github.com/ardet696>
 pkgname=minimalist-mp3-player
-pkgver=1.0.0
+pkgver=1.1.1
 pkgrel=1
 pkgdesc="A minimalist TUI MP3 player with FFT spectrum visualizer and BPM detection"
 arch=('x86_64')
-url="https://github.com/ardet696/MinimalistMP3Player"
+url="https://github.com/ardet696/musiTui"
 license=('MIT')
 depends=('sdl2')
-makedepends=('cmake' 'gcc')
-source=("$pkgname-$pkgver::git+https://github.com/ardet696/MinimalistMP3Player.git")
+makedepends=('cmake' 'gcc' 'git')
+source=("$pkgname-$pkgver::git+https://github.com/ardet696/musiTui.git#tag=v$pkgver")
 sha256sums=('SKIP')
-
-prepare() {
-    cd "$pkgname-$pkgver"
-    git submodule update --init --recursive
-}
 
 build() {
     cd "$pkgname-$pkgver"
