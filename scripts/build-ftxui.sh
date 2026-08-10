@@ -43,15 +43,10 @@ CMAKE_ARGS=(
     -DFTXUI_BUILD_TESTS=OFF
 )
 
-# macOS: Apple Clang lacks std::jthread, use GCC if available
+# macOS: Apple Clang 21+ supports std::jthread natively with -std=c++20.
+# Fallback to GCC via Homebrew only if explicitly set in CXX before running this script.
 if [[ "$OS" == "darwin" ]]; then
-    GCC="$(ls /opt/homebrew/bin/g++-* 2>/dev/null | sort -V | tail -1 || true)"
-    if [[ -n "$GCC" ]]; then
-        CMAKE_ARGS+=(-DCMAKE_CXX_COMPILER="$GCC")
-        echo "Using compiler: $GCC"
-    else
-        echo "Warning: GCC not found. Apple Clang may fail if FTXUI uses std::jthread."
-    fi
+    echo "Using default compiler (Apple Clang)."
 fi
 
 cmake "${CMAKE_ARGS[@]}"
