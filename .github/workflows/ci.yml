@@ -111,7 +111,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: brew install gcc sdl2
+        run: brew install sdl2
 
       - name: Cache FTXUI libraries
         id: ftxui-cache
@@ -124,14 +124,8 @@ jobs:
         if: steps.ftxui-cache.outputs.cache-hit != 'true'
         run: ./scripts/build-ftxui.sh
 
-      - name: Find GCC
-        id: gcc
-        run: |
-          GXX=$(ls /opt/homebrew/bin/g++-* /usr/local/bin/g++-* 2>/dev/null | sort -V | tail -1)
-          echo "compiler=$GXX" >> "$GITHUB_OUTPUT"
-
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DCMAKE_CXX_COMPILER=${{ steps.gcc.outputs.compiler }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
 
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.ncpu)
