@@ -78,17 +78,24 @@ cmake --build build -j$(sysctl -n hw.ncpu)
 
 Update the Command Line Tools (System Settings > General > Software Update, or `xcode-select --install` / `softwareupdate --list`), then re-check `clang++ --version`.
 
-If you cannot upgrade, fall back to GCC via Homebrew:
+If you cannot upgrade, fall back to GCC via Homebrew. FTXUI and the player must be
+built with the *same* compiler, otherwise the libstdc++/libc++ ABI mismatch breaks the
+link, so export `CXX` before running the FTXUI script:
 
 ```bash
 brew install gcc cmake
 
-./scripts/build-ftxui.sh
-
 ls /opt/homebrew/bin/g++-*
 
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-14
+export CXX=g++-14
+
+./scripts/build-ftxui.sh
+
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=$CXX
 cmake --build build -j$(sysctl -n hw.ncpu)
 
 ./build/MP3Player
 ```
+
+If you previously built FTXUI with Apple Clang, delete `third_party/ftxui/lib/darwin-*`
+first so the libraries are rebuilt with GCC.
