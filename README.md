@@ -18,14 +18,16 @@ Otherwise grab a binary from [Releases](https://github.com/ardet696/musiTui/rele
 
 ## First launch
 
-The player is built around the concept of an "Album Player" or "Playlist Player". It scans your music root for directories containing MP3 files, and each subdirectory is treated as an album or playlist.
+The player is built around the concept of an "Album Player" or "Playlist Player". It scans your music root for directories containing audio files, and each subdirectory is treated as an album or playlist.
 
 The file manager is empty until you set that root:
 
 1. Type `RootConfig` in the command bar, press Enter.
 2. Type the full path to your music directory (e.g. `/home/user/Music`), press Enter.
 
-Left side shows detected albums, right side shows the contents of the selected one. Non-MP3 files (images, etc.) are ignored.
+Left side shows detected albums, right side shows the contents of the selected one. Files that are not playable audio (images, etc.) are ignored.
+
+Supported formats: **MP3**, **FLAC** and **WAV**.
 
 ![RootExample](images/RootAlbums.png)
 
