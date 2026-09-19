@@ -2,6 +2,16 @@
 
 #### Designed for great performance and low memory/cpu usage with C++20.
 
+<h3 align="center">Supported: MP3, FLAC &amp; WAV</h3>
+
+<p align="center">
+  <img src="images/mp3.jpg" alt="MP3" width="80" height="80">
+  &nbsp;&nbsp;&nbsp;
+  <img src="images/flac.png" alt="FLAC" width="80" height="80">
+  &nbsp;&nbsp;&nbsp;
+  <img src="images/wav.jpg" alt="WAV" width="80" height="80">
+</p>
+
 ![Default TUI](images/MP3Player.png)
 
 ---
