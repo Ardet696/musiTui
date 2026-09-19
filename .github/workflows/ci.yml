@@ -110,6 +110,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select Apple Clang
+        run: |
+          echo "CC=$(xcrun --find clang)" >> "$GITHUB_ENV"
+          echo "CXX=$(xcrun --find clang++)" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: brew install sdl2
 
@@ -118,14 +123,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/ftxui/lib
-          key: ftxui-${{ runner.os }}-${{ hashFiles('scripts/build-ftxui.sh') }}
+          key: ftxui-${{ runner.os }}-appleclang-${{ hashFiles('scripts/build-ftxui.sh') }}
 
       - name: Build FTXUI for macOS
         if: steps.ftxui-cache.outputs.cache-hit != 'true'
         run: ./scripts/build-ftxui.sh
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON \
+            -DCMAKE_C_COMPILER="$CC" \
+            -DCMAKE_CXX_COMPILER="$CXX"
 
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.ncpu)

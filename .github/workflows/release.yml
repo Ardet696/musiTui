@@ -39,21 +39,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select Apple Clang
+        run: |
+          echo "CC=$(xcrun --find clang)" >> "$GITHUB_ENV"
+          echo "CXX=$(xcrun --find clang++)" >> "$GITHUB_ENV"
+
       - name: Install dependencies
-        run: brew install gcc sdl2
+        run: brew install sdl2
 
       - name: Build FTXUI for macOS
         run: ./scripts/build-ftxui.sh
 
-      - name: Find GCC version
-        id: gcc
-        run: |
-          GXX=$(ls /opt/homebrew/bin/g++-* /usr/local/bin/g++-* 2>/dev/null | sort -V | tail -1)
-          echo "compiler=$GXX" >> "$GITHUB_OUTPUT"
-
       - name: Build
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ steps.gcc.outputs.compiler }}
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="$CC" \
+            -DCMAKE_CXX_COMPILER="$CXX"
           cmake --build build -j$(sysctl -n hw.ncpu)
 
       - name: Package
