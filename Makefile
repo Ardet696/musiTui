@@ -24,7 +24,7 @@ build: $(BUILD_DIR)/CMakeCache.txt
 	cmake --build $(BUILD_DIR) -j$(JOBS)
 
 run: build
-	./$(BUILD_DIR)/MP3Player
+	./$(BUILD_DIR)/musiTui
 
 $(DEBUG_DIR)/CMakeCache.txt:
 	cmake -B $(DEBUG_DIR) -DCMAKE_BUILD_TYPE=Debug -G "$(GENERATOR)"
