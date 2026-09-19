@@ -1,4 +1,5 @@
 #include "AlbumInfo.h"
+#include "../decode/AudioDecoderFactory.h"
 #include <algorithm>
 
 AlbumInfo::AlbumInfo(const std::filesystem::path& dirPath)
@@ -20,7 +21,7 @@ int AlbumInfo::loadSongNames() {
     }
 
     for (const auto& entry : std::filesystem::directory_iterator(dirPath_)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".mp3") {
+        if (entry.is_regular_file() && AudioDecoderFactory::isSupported(entry.path())) {
             songFilenames_.push_back(entry.path().filename().string());
         }
     }

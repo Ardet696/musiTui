@@ -8,7 +8,7 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
-#include "../decode/Mp3Decoder.h"
+#include "../decode/AudioDecoderFactory.h"
 #include "../config/Config.h"
 
 class NotificationBus;

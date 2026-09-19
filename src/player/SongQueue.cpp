@@ -1,4 +1,5 @@
 #include "SongQueue.h"
+#include "../decode/IAudioDecoder.h"
 #include <vector>
 #include <span>
 
@@ -30,7 +31,6 @@ void SongQueue::loadPlaylist(const std::vector<std::filesystem::path>& songPaths
     currentIndex_ = playlist_.empty() ? -1 : 0;
     preWarmedUpTo_.store(-1);
 
-    // Start pre-warm thread
     if (!playlist_.empty()) {
         preWarmThread_ = std::jthread([this](std::stop_token stopToken) {
             preWarmLoop(stopToken);
@@ -55,7 +55,7 @@ std::filesystem::path SongQueue::next() {
 
     currentIndex_++;
     if (currentIndex_ >= static_cast<int>(playlist_.size())) {
-        currentIndex_ = static_cast<int>(playlist_.size()) - 1;  // Stay at end
+        currentIndex_ = static_cast<int>(playlist_.size()) - 1;
         return {};
     }
 
@@ -100,7 +100,6 @@ bool SongQueue::isNextSongReady() const {
 
 void SongQueue::clear() {
     // Stop pre-warm thread BEFORE acquiring mutex to avoid deadlock
-    // (preWarmLoop also locks mutex_)
     if (preWarmThread_.joinable()) {
         preWarmThread_.request_stop();
         preWarmThread_ = std::jthread();
@@ -132,32 +131,30 @@ void SongQueue::preWarmLoop(std::stop_token stopToken) {
             }
         }
 
-        // Sleep before next check
         std::this_thread::sleep_for(Config::PRE_WARM_POLL_INTERVAL_MS);
     }
 }
 
 bool SongQueue::preWarmSong(const std::filesystem::path& songPath) {
-    Mp3Decoder decoder;
-    if (!decoder.open(songPath)) {
+    auto decoder = AudioDecoderFactory::create(songPath);
+    if (!decoder || !decoder->open(songPath)) {
         if (bus_) bus_->push("Pre-warm failed: " + songPath.filename().string(), NotifyLevel::Error);
         return false;
     }
 
-    const int channels = decoder.channels();
+    const int channels = decoder->channels();
 
-    // Decode validation frames to verify file is good
     constexpr std::size_t chunkFrames = Config::DECODE_CHUNK_FRAMES;
     std::vector<int16_t> buffer(chunkFrames * channels);
 
     for (int i = 0; i < Config::PRE_WARM_VALIDATION_FRAMES; ++i) {
-        const std::size_t framesDecoded = decoder.decodeFrames(
+        const std::size_t framesDecoded = decoder->decodeFrames(
             std::span(buffer.data(), buffer.size()),
             chunkFrames
         );
         if (framesDecoded == 0) break;
     }
 
-    decoder.close();
+    decoder->close();
     return true;
 }

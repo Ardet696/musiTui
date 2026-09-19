@@ -1,5 +1,6 @@
 #include "Song.h"
-#include "../decode/Mp3Decoder.h"
+#include "../decode/AudioDecoderFactory.h"
+#include "../decode/IAudioDecoder.h"
 #include "../config/Config.h"
 #include <vector>
 #include <sstream>
@@ -25,16 +26,16 @@ void Song::extractMetadata() {
 
     const std::uintmax_t fileSizeBytes = std::filesystem::file_size(filePath_);
 
-    // Estimate bitrate by sampling first 10 frames 200IQ, open decoder just to get sample rate and channels
-    Mp3Decoder decoder;
-    if (!decoder.open(filePath_)) {
+    auto decoder = AudioDecoderFactory::create(filePath_);
+    if (!decoder || !decoder->open(filePath_)) {
         durationSeconds_ = 0;
         type_ = SongType::Standard;
         return;
     }
 
-    const int sampleRate = decoder.sampleRate();
-    const int channels = decoder.channels();
+    const int sampleRate = decoder->sampleRate();
+    const int channels = decoder->channels();
+    const std::uint64_t totalSamples = decoder->totalSamples();
 
     const std::size_t sampleFrames = 10;
     const std::size_t chunkFrames = 1152;
@@ -42,7 +43,7 @@ void Song::extractMetadata() {
 
     std::size_t totalFramesSampled = 0;
     for (std::size_t i = 0; i < sampleFrames; ++i) {
-        const std::size_t framesDecoded = decoder.decodeFrames(
+        const std::size_t framesDecoded = decoder->decodeFrames(
             std::span<int16_t>(buffer.data(), buffer.size()),
             chunkFrames
         );
@@ -50,25 +51,24 @@ void Song::extractMetadata() {
         totalFramesSampled += framesDecoded;
     }
 
-    decoder.close();
+    decoder->close();
 
-    if (totalFramesSampled == 0 || sampleRate == 0) {
+    if (totalFramesSampled == 0 || sampleRate == 0 || channels == 0) {
         durationSeconds_ = 0;
         type_ = SongType::Standard;
         return;
     }
 
-    // Estimate duration using file size and average bitrate, typical for mp3 is  128-320 kbps, I assume 192 kbps as default
-    // PCM samples per second = sampleRate * channels
-    // File size in bytes = (total_samples * compression_ratio) / sample_rate
+    if (totalSamples > 0) {
+        durationSeconds_ = static_cast<int>(
+            totalSamples / (static_cast<std::uint64_t>(sampleRate) * channels)
+        );
+    } else {
+        durationSeconds_ = static_cast<int>(
+            (fileSizeBytes * 8.0) / Config::ESTIMATED_MP3_BITRATE
+        );
+    }
 
-    const int estimatedDurationSeconds = static_cast<int>(
-        (fileSizeBytes * 8.0) / Config::ESTIMATED_MP3_BITRATE
-    );
-
-    durationSeconds_ = estimatedDurationSeconds;
-
-    // Classify song type based on duration
     type_ = classifyByDuration(durationSeconds_);
 }
 

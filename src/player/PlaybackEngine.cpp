@@ -1,5 +1,6 @@
 #include "PlaybackEngine.h"
-#include "../decode/Mp3Decoder.h"
+#include "../decode/AudioDecoderFactory.h"
+#include "../decode/IAudioDecoder.h"
 #include "../audio/SdlAudioSink.h"
 #include "../util/RingBuffer.h"
 #include "../config/Config.h"
@@ -12,7 +13,7 @@ PlaybackEngine::PlaybackEngine(NotificationBus* bus,
                                SinkFactory sinkFactory)
     : decoderFactory_(decoderFactory
         ? std::move(decoderFactory)
-        : [] { return std::make_unique<Mp3Decoder>(); })
+        : [](const std::filesystem::path& p) { return AudioDecoderFactory::create(p); })
     , sinkFactory_(sinkFactory
         ? std::move(sinkFactory)
         : [](NotificationBus* b) { return std::make_unique<SdlAudioSink>(b); })
@@ -31,20 +32,24 @@ PlaybackEngine::~PlaybackEngine() {
     stop();
 }
 
-bool PlaybackEngine::load(const std::filesystem::path& mp3File) {
+bool PlaybackEngine::load(const std::filesystem::path& audioFile) {
     // Tears down the source only. The sink stays open across tracks: a track
     // change is a change of what we feed the device, not of the device itself.
     stopPlayback();
 
-    decoder_ = decoderFactory_();
-    if (!decoder_->open(mp3File)) {
-        if (bus_) bus_->push("Failed to open: " + mp3File.filename().string(), NotifyLevel::Error);
+    decoder_ = decoderFactory_(audioFile);
+    if (!decoder_) {
+        if (bus_) bus_->push("Unsupported format: " + audioFile.filename().string(), NotifyLevel::Error);
+        return false;
+    }
+    if (!decoder_->open(audioFile)) {
+        if (bus_) bus_->push("Failed to open: " + audioFile.filename().string(), NotifyLevel::Error);
         decoder_.reset();
         return false;
     }
 
     // Store file info
-    currentFile_ = mp3File;
+    currentFile_ = audioFile;
     sampleRate_ = decoder_->sampleRate();
     channels_ = decoder_->channels();
     totalSamples_ = decoder_->totalSamples();

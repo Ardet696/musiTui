@@ -1,4 +1,5 @@
 #include "Playlist.h"
+#include "../decode/AudioDecoderFactory.h"
 #include <algorithm>
 
 Playlist::Playlist(const std::filesystem::path& dirPath, const std::string& creator) : dirPath_(dirPath)
@@ -18,7 +19,7 @@ void Playlist::loadSongsFromDirectory() {
             continue;
         }
 
-        if (entry.is_regular_file() && entry.path().extension() == ".mp3") {
+        if (entry.is_regular_file() && AudioDecoderFactory::isSupported(entry.path())) {
             try {
                 songs_.emplace_back(entry.path(), title_);
             } catch (const std::exception&) {

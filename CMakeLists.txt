@@ -109,7 +109,7 @@ function(mp3player_configure target)
     set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
     target_compile_options(${target} PRIVATE
         $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic>
-        # Security hardening (non-debug builds parse untrusted MP3 input)
+        # Security hardening (non-debug builds parse untrusted audio input)
         $<$<AND:$<CXX_COMPILER_ID:GNU,Clang,AppleClang>,$<NOT:$<CONFIG:Debug>>>:-fstack-protector-strong;-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=2>
     )
 endfunction()
@@ -132,6 +132,9 @@ add_library(mp3player_core STATIC
     src/audio/SdlAudioSubsystem.cpp
 
     src/decode/Mp3Decoder.cpp
+    src/decode/FlacDecoder.cpp
+    src/decode/WavDecoder.cpp
+    src/decode/AudioDecoderFactory.cpp
     src/decode/SpectrumAnalyzer.cpp
     src/decode/BpmDetector.cpp
     src/decode/Fft.cpp

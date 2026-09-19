@@ -89,7 +89,7 @@ private:
 PlaybackEngine makeEngine(NotificationBus& bus, SinkState& state) {
     return PlaybackEngine(
         &bus,
-        [] { return std::make_unique<FakeDecoder>(); },
+        [](const std::filesystem::path&) { return std::make_unique<FakeDecoder>(); },
         [&state](NotificationBus*) { return std::make_unique<FakeSink>(state); });
 }
 

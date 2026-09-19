@@ -26,7 +26,7 @@ public:
         Paused
     };
 
-    using DecoderFactory = std::function<std::unique_ptr<IAudioDecoder>()>;
+    using DecoderFactory = std::function<std::unique_ptr<IAudioDecoder>(const std::filesystem::path&)>;
     using SinkFactory    = std::function<std::unique_ptr<IAudioSink>(NotificationBus*)>;
 
     explicit PlaybackEngine(NotificationBus* bus = nullptr,
@@ -39,7 +39,7 @@ public:
     PlaybackEngine(PlaybackEngine&&) = delete;
     PlaybackEngine& operator=(PlaybackEngine&&) = delete;
 
-    bool load(const std::filesystem::path& mp3File);
+    bool load(const std::filesystem::path& audioFile);
     void play();
     void pause();
     void stop();

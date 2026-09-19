@@ -1,4 +1,5 @@
 #include "LibraryScanner.h"
+#include "../decode/AudioDecoderFactory.h"
 #include "../util/PathValidator.h"
 
 MusicLibrary LibraryScanner::scanRoot(const std::filesystem::path& rootDir) const {
@@ -20,7 +21,7 @@ MusicLibrary LibraryScanner::scanRoot(const std::filesystem::path& rootDir) cons
         const std::filesystem::path& dirPath = entry.path();
         const std::string dirName = dirPath.filename().string();
 
-        bool hasMp3Files = false;
+        bool hasAudioFiles = false;
         bool hasSubdirectories = false;
 
         try {
@@ -28,8 +29,8 @@ MusicLibrary LibraryScanner::scanRoot(const std::filesystem::path& rootDir) cons
                 if (innerEntry.is_directory()) {
                     hasSubdirectories = true;
                 }
-                if (innerEntry.is_regular_file() && innerEntry.path().extension() == ".mp3") {
-                    hasMp3Files = true;
+                if (innerEntry.is_regular_file() && AudioDecoderFactory::isSupported(innerEntry.path())) {
+                    hasAudioFiles = true;
                 }
             }
         } catch (const std::exception&) {
@@ -39,7 +40,7 @@ MusicLibrary LibraryScanner::scanRoot(const std::filesystem::path& rootDir) cons
         if (hasSubdirectories) {
             continue;
         }
-        if (!hasMp3Files) {
+        if (!hasAudioFiles) {
             continue;
         }
 

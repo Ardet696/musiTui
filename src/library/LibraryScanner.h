@@ -10,7 +10,6 @@ class LibraryScanner {
 public:
         struct Options {
                 bool recursive_albums = false;
-                std::vector<std::string> extensions { ".mp3"};
                 bool include_hidden = false;
                 bool sort_results = true;
         };
