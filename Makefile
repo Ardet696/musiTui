@@ -18,7 +18,7 @@ GENERATOR   ?= Ninja
 all: build
 
 $(BUILD_DIR)/CMakeCache.txt:
-	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -G $(GENERATOR)
+	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -G "$(GENERATOR)"
 
 build: $(BUILD_DIR)/CMakeCache.txt
 	cmake --build $(BUILD_DIR) -j$(JOBS)
@@ -27,13 +27,13 @@ run: build
 	./$(BUILD_DIR)/MP3Player
 
 $(DEBUG_DIR)/CMakeCache.txt:
-	cmake -B $(DEBUG_DIR) -DCMAKE_BUILD_TYPE=Debug -G $(GENERATOR)
+	cmake -B $(DEBUG_DIR) -DCMAKE_BUILD_TYPE=Debug -G "$(GENERATOR)"
 
 debug: $(DEBUG_DIR)/CMakeCache.txt
 	cmake --build $(DEBUG_DIR) -j$(JOBS)
 
 $(TEST_DIR)/CMakeCache.txt:
-	cmake -B $(TEST_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -G $(GENERATOR)
+	cmake -B $(TEST_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -G "$(GENERATOR)"
 
 test: $(TEST_DIR)/CMakeCache.txt
 	cmake --build $(TEST_DIR) -j$(JOBS)

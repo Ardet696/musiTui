@@ -34,23 +34,16 @@ if(NOT EXISTS ${FTXUI_LIB_DIR}/libftxui-screen.a)
         "Then re-run cmake.")
 endif()
 
-add_library(ftxui-screen STATIC IMPORTED)
-set_target_properties(ftxui-screen PROPERTIES
-    IMPORTED_LOCATION ${FTXUI_LIB_DIR}/libftxui-screen.a
-    INTERFACE_INCLUDE_DIRECTORIES ${FTXUI_DIR}/include
-)
-
-add_library(ftxui-dom STATIC IMPORTED)
-set_target_properties(ftxui-dom PROPERTIES
-    IMPORTED_LOCATION ${FTXUI_LIB_DIR}/libftxui-dom.a
-    INTERFACE_LINK_LIBRARIES ftxui-screen
-)
-
-add_library(ftxui-component STATIC IMPORTED)
-set_target_properties(ftxui-component PROPERTIES
-    IMPORTED_LOCATION ${FTXUI_LIB_DIR}/libftxui-component.a
-    INTERFACE_LINK_LIBRARIES ftxui-dom
-)
+set(FTXUI_PREVIOUS "")
+foreach(lib screen dom component)
+    add_library(ftxui-${lib} STATIC IMPORTED)
+    set_target_properties(ftxui-${lib} PROPERTIES
+        IMPORTED_LOCATION ${FTXUI_LIB_DIR}/libftxui-${lib}.a
+        INTERFACE_INCLUDE_DIRECTORIES ${FTXUI_DIR}/include
+        INTERFACE_LINK_LIBRARIES "${FTXUI_PREVIOUS}"
+    )
+    set(FTXUI_PREVIOUS ftxui-${lib})
+endforeach()
 
 option(MP3PLAYER_VENDOR_SDL2 "Download and build SDL2 from source instead of using a system install" OFF)
 
@@ -173,12 +166,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(MP3Player PRIVATE -pie -Wl,-z,relro,-z,now)
 endif()
 
-target_link_libraries(MP3Player PRIVATE
-    mp3player_core
-    ftxui-component
-    ftxui-dom
-    ftxui-screen
-)
+target_link_libraries(MP3Player PRIVATE mp3player_core ftxui-component)
 
 install(TARGETS MP3Player RUNTIME DESTINATION bin)
 
@@ -195,7 +183,15 @@ if(BUILD_TESTING)
     )
     FetchContent_MakeAvailable(Catch2)
 
-    add_executable(unit_tests
+    function(mp3player_add_test_suite name)
+        add_executable(${name} ${ARGN})
+        mp3player_configure(${name})
+        target_link_libraries(${name} PRIVATE Catch2::Catch2WithMain mp3player_core)
+        target_compile_definitions(${name} PRIVATE
+            FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+    endfunction()
+
+    mp3player_add_test_suite(unit_tests
         tests/unit/RingBufferTest.cpp
         tests/unit/FftTest.cpp
         tests/unit/SpectrumAnalyzerTest.cpp
@@ -210,30 +206,15 @@ if(BUILD_TESTING)
         tests/unit/AsyncLibraryLoadTest.cpp
         tests/unit/OutputDeviceSwitchTest.cpp
     )
-    target_link_libraries(unit_tests PRIVATE Catch2::Catch2WithMain mp3player_core)
-    target_compile_features(unit_tests PRIVATE cxx_std_20)
-    target_compile_options(unit_tests PRIVATE
-        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic>
-    )
-    target_compile_definitions(unit_tests PRIVATE
-        FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
-    )
 
-    add_executable(stress_tests
+    mp3player_add_test_suite(stress_tests
         tests/stress/RingBufferStressTest.cpp
     )
-    target_link_libraries(stress_tests PRIVATE Catch2::Catch2WithMain mp3player_core)
-    target_compile_features(stress_tests PRIVATE cxx_std_20)
 
-    add_executable(integration_tests
+    mp3player_add_test_suite(integration_tests
         tests/integration/Mp3DecoderTest.cpp
         tests/integration/FlacDecoderTest.cpp
         tests/integration/WavDecoderTest.cpp
-    )
-    target_link_libraries(integration_tests PRIVATE Catch2::Catch2WithMain mp3player_core)
-    target_compile_features(integration_tests PRIVATE cxx_std_20)
-    target_compile_definitions(integration_tests PRIVATE
-        FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
     )
 
     add_test(NAME unit COMMAND unit_tests)
