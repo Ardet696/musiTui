@@ -178,3 +178,97 @@ install(CODE "
     set(bindir \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\")
     file(CREATE_LINK musiTui \"\${bindir}/MP3Player\" SYMBOLIC)
 ")
+
+option(BUILD_TESTING "Build unit tests" OFF)
+
+if(BUILD_TESTING)
+    enable_testing()
+
+    include(FetchContent)
+    FetchContent_Declare(
+        Catch2
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG v3.7.1
+    )
+    FetchContent_MakeAvailable(Catch2)
+
+    function(mp3player_add_test_suite name)
+        add_executable(${name} ${ARGN})
+        mp3player_configure(${name})
+        target_link_libraries(${name} PRIVATE Catch2::Catch2WithMain mp3player_core)
+        target_compile_definitions(${name} PRIVATE
+            FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+    endfunction()
+
+    mp3player_add_test_suite(unit_tests
+        tests/unit/RingBufferTest.cpp
+        tests/unit/FftTest.cpp
+        tests/unit/SpectrumAnalyzerTest.cpp
+        tests/unit/BpmDetectorTest.cpp
+        tests/unit/PathValidatorTest.cpp
+        tests/unit/ConfigServiceTest.cpp
+        tests/unit/Mp3DecoderRaiiTest.cpp
+        tests/unit/AudioDecoderFactoryTest.cpp
+        tests/unit/DecodeThreadTest.cpp
+        tests/unit/ThreadLifecycleTest.cpp
+        tests/unit/SdlAudioSinkTest.cpp
+        tests/unit/AsyncLibraryLoadTest.cpp
+        tests/unit/OutputDeviceSwitchTest.cpp
+    )
+
+    mp3player_add_test_suite(stress_tests
+        tests/stress/RingBufferStressTest.cpp
+    )
+
+    mp3player_add_test_suite(integration_tests
+        tests/integration/Mp3DecoderTest.cpp
+        tests/integration/FlacDecoderTest.cpp
+        tests/integration/WavDecoderTest.cpp
+    )
+
+    add_test(NAME unit COMMAND unit_tests)
+    add_test(NAME stress COMMAND stress_tests)
+    add_test(NAME integration COMMAND integration_tests)
+endif()
+
+option(BUILD_FUZZERS "Build libFuzzer targets (requires Clang)" OFF)
+
+if(BUILD_FUZZERS)
+    add_executable(fuzz_mp3 tests/fuzz/FuzzMp3.cpp)
+    target_compile_features(fuzz_mp3 PRIVATE cxx_std_20)
+    target_compile_options(fuzz_mp3 PRIVATE -g -O1 -fsanitize=fuzzer,address,undefined)
+    target_link_options(fuzz_mp3 PRIVATE -fsanitize=fuzzer,address,undefined)
+endif()
+
+option(BUILD_BENCHMARKS "Build benchmark executables" OFF)
+
+if(BUILD_BENCHMARKS)
+    function(add_bench target)
+        add_executable(${target} ${ARGN})
+        target_compile_features(${target} PRIVATE cxx_std_20)
+        set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
+        target_compile_options(${target} PRIVATE
+            $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -O2>
+        )
+    endfunction()
+
+    add_bench(CommandQueueBench
+        tests/bench/CommandQueueBench.cpp
+        src/commands/CommandQueue.cpp
+    )
+
+    add_bench(RingBufferBench
+        tests/bench/RingBufferBench.cpp
+    )
+
+    add_bench(SpectrumBench
+        tests/bench/SpectrumBench.cpp
+        src/decode/SpectrumAnalyzer.cpp
+        src/decode/Fft.cpp
+    )
+
+    add_bench(BpmDetectorBench
+        tests/bench/BpmDetectorBench.cpp
+        src/decode/BpmDetector.cpp
+    )
+endif()
