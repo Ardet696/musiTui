@@ -18,15 +18,33 @@ Binaries for Linux (x86_64) and macOS (arm64) are on the [Releases](https://gith
 | Fedora | `sudo dnf install SDL2` |
 | macOS | `brew install sdl2` |
 
+Download the binary for your platform, then put it on your `PATH` so it runs from anywhere:
+
 ```bash
-chmod +x mp3player-linux-x86_64
-./mp3player-linux-x86_64
+sudo install -Dm755 musiTui-linux-x86_64 /usr/local/bin/musiTui
+```
+
+```bash
+musiTui
+```
+
+To try it without installing, just mark it executable and run it in place:
+
+```bash
+chmod +x musiTui-linux-x86_64
+./musiTui-linux-x86_64
 ```
 
 ## Arch Linux (AUR)
 
 ```bash
 yay -S minimalist-mp3-player
+```
+
+The package installs the `musiTui` command:
+
+```bash
+musiTui
 ```
 
 ## Build from source (Linux)
@@ -46,10 +64,19 @@ cd musiTui
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
-./build/MP3Player
+./build/musiTui
+```
+
+To install it as the `musiTui` command instead of running it from the build directory:
+
+```bash
+sudo cmake --install build
+musiTui
 ```
 
 > Note: avoid `sudo cmake --install build` if you plan to use the AUR package later. Both install to different paths and the manual install takes priority.
+
+> `MP3Player` is still installed as a symlink to `musiTui` so older instructions keep working. It is deprecated and will be removed in a future release.
 
 ## Build from source (macOS)
 
@@ -71,7 +98,7 @@ brew install cmake
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(sysctl -n hw.ncpu)
 
-./build/MP3Player
+./build/musiTui
 ```
 
 ### Older Apple Clang
@@ -94,7 +121,7 @@ export CXX=g++-14
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=$CXX
 cmake --build build -j$(sysctl -n hw.ncpu)
 
-./build/MP3Player
+./build/musiTui
 ```
 
 If you previously built FTXUI with Apple Clang, delete `third_party/ftxui/lib/darwin-*`

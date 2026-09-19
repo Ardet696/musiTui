@@ -16,6 +16,12 @@ yay -S minimalist-mp3-player
 
 Otherwise grab a binary from [Releases](https://github.com/ardet696/musiTui/releases) or build from source. Full steps for every platform: **[Installation Guide](docs/INSTALL.md)**.
 
+Once installed, launch it from anywhere:
+
+```bash
+musiTui
+```
+
 ## First launch
 
 The player is built around the concept of an "Album Player" or "Playlist Player". It scans your music root for directories containing audio files, and each subdirectory is treated as an album or playlist.
@@ -39,6 +45,8 @@ The command panel works like a mini config terminal.
 - Interactive: `volume`, `output`, `visuals`, `themes`, `RootConfig` wait for a selection. Press `Esc` to cancel and return to normal input.
 
 ## Build and run
+
+For working on the player itself. Users installing it should follow the [Installation Guide](docs/INSTALL.md) instead.
 
 ```bash
 make run     # build release and launch
