@@ -203,6 +203,7 @@ if(BUILD_TESTING)
         tests/unit/PathValidatorTest.cpp
         tests/unit/ConfigServiceTest.cpp
         tests/unit/Mp3DecoderRaiiTest.cpp
+        tests/unit/AudioDecoderFactoryTest.cpp
         tests/unit/DecodeThreadTest.cpp
         tests/unit/ThreadLifecycleTest.cpp
         tests/unit/SdlAudioSinkTest.cpp
@@ -226,6 +227,8 @@ if(BUILD_TESTING)
 
     add_executable(integration_tests
         tests/integration/Mp3DecoderTest.cpp
+        tests/integration/FlacDecoderTest.cpp
+        tests/integration/WavDecoderTest.cpp
     )
     target_link_libraries(integration_tests PRIVATE Catch2::Catch2WithMain mp3player_core)
     target_compile_features(integration_tests PRIVATE cxx_std_20)
