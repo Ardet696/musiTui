@@ -21,7 +21,7 @@
 Quickest path (Arch):
 
 ```bash
-yay -S minimalist-mp3-player
+yay -S musitui
 ```
 
 Otherwise grab a binary from [Releases](https://github.com/ardet696/musiTui/releases) or build from source. Full steps for every platform: **[Installation Guide](docs/INSTALL.md)**.

@@ -107,7 +107,7 @@ jobs:
   #         EOF
   #
   #     - name: Clone AUR repo
-  #       run: git clone ssh://aur@aur.archlinux.org/minimalist-mp3-player.git aur
+  #       run: git clone ssh://aur@aur.archlinux.org/musitui.git aur
   #
   #     - name: Update PKGBUILD
   #       working-directory: aur

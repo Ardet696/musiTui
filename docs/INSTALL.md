@@ -38,7 +38,7 @@ chmod +x musiTui-linux-x86_64
 ## Arch Linux (AUR)
 
 ```bash
-yay -S minimalist-mp3-player
+yay -S musitui
 ```
 
 The package installs the `musiTui` command:
