@@ -1,6 +1,6 @@
 # Maintainer: ardet696 <https://github.com/ardet696>
 pkgname=musitui
-pkgver=1.3.0
+pkgver=1.4.0
 pkgrel=1
 pkgdesc="A minimalist TUI music player (MP3/FLAC/WAV) with FFT spectrum visualizer and BPM detection"
 arch=('x86_64')
