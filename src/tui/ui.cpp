@@ -9,7 +9,7 @@
 
 ftxui::Component buildTui(
     ILibraryService& service,
-    IConfigService& config,
+    CommandDispatcher& dispatcher,
     ftxui::App& screen,
     std::shared_ptr<std::atomic<bool>> reloadFlag,
     std::shared_ptr<int> visualIndex)
@@ -18,7 +18,7 @@ ftxui::Component buildTui(
 
   auto file_manager = CreateFileManager(service, service, reloadFlag);
   auto playing_bar  = CreatePlayingBar(service, visualIndex);
-  auto user_inputs  = CreateUserInputs(service, config, reloadFlag, visualIndex);
+  auto user_inputs  = CreateUserInputs(service, dispatcher);
 
   auto layout = Container::Vertical({
     file_manager,

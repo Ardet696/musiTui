@@ -9,7 +9,7 @@
 #include <deque>
 
 #include "../service/ILibraryService.h"
-#include "../service/IConfigService.h"
+#include "../commands/CommandDispatcher.h"
 #include "../events/NotificationBus.h"
 #include "ftxui/component/event.hpp"
 #include "Palette.h"
@@ -17,16 +17,13 @@
 namespace {
 enum class InputMode { Command, RootConfig, ThemeConfig, OutputDevice, VisualsConfig, Volume };
 
-constexpr std::string_view CMD_PLAY  = "play";
-constexpr std::string_view CMD_STOP  = "stop";
-constexpr std::string_view CMD_NEXT  = "next";
-constexpr std::string_view CMD_PREV  = "prev";
 constexpr std::string_view CMD_HELP  = "help";
 constexpr std::string_view CMD_F_HELP = "fileHelp";
 constexpr std::string_view CMD_THEMES = "themes";
 constexpr std::string_view CMD_OUTPUT = "output";
 constexpr std::string_view CMD_VISUALS = "visuals";
 constexpr std::string_view CMD_VOLUME = "volume";
+constexpr std::string_view CMD_ROOT = "RootConfig";
 
 enum class MsgType { System, User, Error };
 
@@ -91,13 +88,10 @@ std::string modeLabel(InputMode m) {
 
 }
 
-ftxui::Component CreateUserInputs(ILibraryService& service, IConfigService& config,
-                                  std::shared_ptr<std::atomic<bool>> reload_flag,
-                                  std::shared_ptr<int> visualIndex) {
+ftxui::Component CreateUserInputs(ILibraryService& service, CommandDispatcher& dispatcher) {
   using namespace ftxui;
   auto input_content = std::make_shared<std::string>();
   auto mode = std::make_shared<InputMode>(InputMode::Command);
-  auto cached_devices = std::make_shared<std::vector<std::string>>();
   auto chatLog = std::make_shared<std::deque<ChatMessage>>();
 
   chatLog->push_back({"Type 'help' for commands", MsgType::System, std::chrono::steady_clock::now()});
@@ -111,7 +105,16 @@ ftxui::Component CreateUserInputs(ILibraryService& service, IConfigService& conf
   input_option.placeholder = "enter command...";
   auto input = Input(input_content.get(), "", input_option);
 
-  auto component = CatchEvent(input, [=, &service, &config](Event event) mutable {
+  // Bare words open a guided prompt; everything else (including one-shot
+  // forms like "theme 2") goes straight to the dispatcher.
+  auto runCommand = [=, &dispatcher](const std::string& line) {
+    auto result = dispatcher.execute(line);
+    MsgType type = result.ok ? MsgType::System : MsgType::Error;
+    std::istringstream lines(result.message);
+    for (std::string msgLine; std::getline(lines, msgLine);) addMsg(msgLine, type);
+  };
+
+  auto component = CatchEvent(input, [=, &service, &dispatcher](Event event) mutable {
     // Esc cancels any multi-step mode
     if (event == Event::Escape && *mode != InputMode::Command) {
       addMsg("Cancelled " + modeLabel(*mode), MsgType::System);
@@ -123,13 +126,11 @@ ftxui::Component CreateUserInputs(ILibraryService& service, IConfigService& conf
     // Volume mode: arrow keys to adjust, Esc to exit (handled above)
     if (*mode == InputMode::Volume) {
       if (event == Event::ArrowRight) {
-        int vol = std::min(service.getVolume() + 5, 100);
-        service.setVolume(vol);
+        dispatcher.execute("volume +5");
         return true;
       }
       if (event == Event::ArrowLeft) {
-        int vol = std::max(service.getVolume() - 5, 0);
-        service.setVolume(vol);
+        dispatcher.execute("volume -5");
         return true;
       }
       // Consume all other input in volume mode (don't let typing happen)
@@ -139,131 +140,62 @@ ftxui::Component CreateUserInputs(ILibraryService& service, IConfigService& conf
       return false;
     }
 
-    if (event == Event::Return && !input_content->empty()) {
-     if (*mode == InputMode::Command) {
-       addMsg(*input_content, MsgType::User);
+    if (event != Event::Return || input_content->empty()) return false;
 
-       if (*input_content == "RootConfig") {
+    const std::string& inp = *input_content;
+    addMsg(inp, MsgType::User);
+
+    switch (*mode) {
+      case InputMode::Command:
+        if (inp == CMD_ROOT) {
           *mode = InputMode::RootConfig;
           addMsg("Enter new root path (Esc to cancel):", MsgType::System);
-          input_content->clear();
-          return true;
-       }
-       if (*input_content == "themes") {
-         *mode = InputMode::ThemeConfig;
-         addMsg("[1]-Fire [2]-BW [3]-PurpleRain [4]-Forest (Esc to cancel)", MsgType::System);
-         input_content->clear();
-         return true;
-       }
-       if (*input_content == "output") {
-         *cached_devices = service.listOutputDevices();
-         if (!cached_devices->empty()) {
-           *mode = InputMode::OutputDevice;
-           addMsg(buildDeviceListPrompt(*cached_devices) + " (Esc to cancel)", MsgType::System);
-         } else {
-           addMsg("No output devices found.", MsgType::Error);
-         }
-         input_content->clear();
-         return true;
-       }
-       if (*input_content == "visuals") {
-         *mode = InputMode::VisualsConfig;
-         addMsg("[1]-Spectrum [2]-Oscilloscope [3]-Mirrored [4]-Rolling [5]-Wave (Esc to cancel)", MsgType::System);
-         input_content->clear();
-         return true;
-       }
-       if (*input_content == CMD_VOLUME) {
-         *mode = InputMode::Volume;
-         addMsg("Volume: Left/Right arrows to adjust, Esc to exit", MsgType::System);
-         input_content->clear();
-         return true;
-       }
-       if (*input_content == CMD_PLAY) {
-         service.resumePlayback();
-         addMsg("Playing...", MsgType::System);
-       } else if (*input_content == CMD_STOP) {
-         service.stopPlayback();
-         addMsg("Stopped", MsgType::System);
-       } else if (*input_content == CMD_NEXT) {
-         service.nextSong();
-         addMsg("Next track", MsgType::System);
-       } else if (*input_content == CMD_PREV) {
-         service.prevSong();
-         addMsg("Previous track", MsgType::System);
-       } else if (*input_content == CMD_HELP) {
-         addMsg("play, stop, next, prev, volume, output, visuals, themes, quit/q", MsgType::System);
-       } else if (*input_content == CMD_F_HELP) {
-         addMsg("Albums: Up/Down, Enter=select, Backspace=back", MsgType::System);
-       } else {
-         addMsg("Unknown command: " + *input_content, MsgType::Error);
-       }
-     }
-     else if (*mode == InputMode::RootConfig) {
-       addMsg(*input_content, MsgType::User);
-       std::string error;
-       if (service.setRootPath(*input_content, error)) {
-         config.setRootPath(*input_content);
-         addMsg("Root: " + *input_content, MsgType::System);
-         *reload_flag = true;
-       } else {
-         addMsg("Invalid path: " + error, MsgType::Error);
-       }
-       *mode = InputMode::Command;
-     }
-     else if (*mode == InputMode::ThemeConfig) {
-       addMsg(*input_content, MsgType::User);
-       const std::string& inp = *input_content;
-       if (inp.length() == 1 && inp[0] >= '1' && inp[0] <= '4') {
-         const char* names[] = {"Fire", "BW", "PurpleRain", "Forest"};
-         Palette::Theme themes[] = {Palette::Theme::Fire, Palette::Theme::BW,
-                                    Palette::Theme::PurpleRain, Palette::Theme::Forest};
-         int idx = inp[0] - '1';
-         Palette::setGradient(themes[idx]);
-         config.setTheme(idx);
-         addMsg(std::string("Theme: ") + names[idx], MsgType::System);
-       } else {
-         addMsg("Invalid. Enter [1..4]", MsgType::Error);
-       }
-       *mode = InputMode::Command;
-     }
-     else if (*mode == InputMode::OutputDevice) {
-       addMsg(*input_content, MsgType::User);
-       int selection = 0;
-       try {
-         selection = std::stoi(*input_content);
-       } catch (...) {
-         addMsg("Invalid. Enter a device number.", MsgType::Error);
-         *mode = InputMode::Command;
-         input_content->clear();
-         return true;
-       }
-
-       if (selection >= 1 && selection <= static_cast<int>(cached_devices->size())) {
-         // Result is reported through the notification bus: the switch is
-         // asynchronous and may be rejected if the device cannot be opened.
-         service.setOutputDevice(selection - 1);
-       } else {
-         addMsg("Invalid [1.." + std::to_string(cached_devices->size()) + "]", MsgType::Error);
-       }
-       *mode = InputMode::Command;
-     }
-     else if (*mode == InputMode::VisualsConfig) {
-       addMsg(*input_content, MsgType::User);
-       const std::string& inp = *input_content;
-       if (inp.length() == 1 && inp[0] >= '1' && inp[0] <= '5') {
-         *visualIndex = inp[0] - '1';
-         config.setVisual(*visualIndex);
-         const char* names[] = {"Spectrum", "Oscilloscope", "Mirrored", "Rolling", "Wave"};
-         addMsg(std::string("Visual: ") + names[*visualIndex], MsgType::System);
-       } else {
-         addMsg("Invalid. Enter [1..5]", MsgType::Error);
-       }
-       *mode = InputMode::Command;
-     }
-     input_content->clear();
-     return true;
+        } else if (inp == CMD_THEMES) {
+          *mode = InputMode::ThemeConfig;
+          addMsg("[1]-Fire [2]-BW [3]-PurpleRain [4]-Forest (Esc to cancel)", MsgType::System);
+        } else if (inp == CMD_OUTPUT) {
+          auto devices = service.listOutputDevices();
+          if (!devices.empty()) {
+            *mode = InputMode::OutputDevice;
+            addMsg(buildDeviceListPrompt(devices) + " (Esc to cancel)", MsgType::System);
+          } else {
+            addMsg("No output devices found.", MsgType::Error);
+          }
+        } else if (inp == CMD_VISUALS) {
+          *mode = InputMode::VisualsConfig;
+          addMsg("[1]-Spectrum [2]-Oscilloscope [3]-Mirrored [4]-Rolling [5]-Wave (Esc to cancel)", MsgType::System);
+        } else if (inp == CMD_VOLUME) {
+          *mode = InputMode::Volume;
+          addMsg("Volume: Left/Right arrows to adjust, Esc to exit", MsgType::System);
+        } else if (inp == CMD_HELP) {
+          addMsg("play, stop, next, prev, status, albums, volume, output, visuals, themes, quit/q", MsgType::System);
+        } else if (inp == CMD_F_HELP) {
+          addMsg("Albums: Up/Down, Enter=select, Backspace=back", MsgType::System);
+        } else {
+          runCommand(inp);
+        }
+        break;
+      case InputMode::RootConfig:
+        runCommand("root " + CommandDispatcher::quoteArg(inp));
+        *mode = InputMode::Command;
+        break;
+      case InputMode::ThemeConfig:
+        runCommand("theme " + CommandDispatcher::quoteArg(inp));
+        *mode = InputMode::Command;
+        break;
+      case InputMode::OutputDevice:
+        runCommand("output " + CommandDispatcher::quoteArg(inp));
+        *mode = InputMode::Command;
+        break;
+      case InputMode::VisualsConfig:
+        runCommand("visual " + CommandDispatcher::quoteArg(inp));
+        *mode = InputMode::Command;
+        break;
+      case InputMode::Volume:
+        break;
     }
-    return false;
+    input_content->clear();
+    return true;
   });
 
   return Renderer(component, [component, chatLog, mode, &service] {

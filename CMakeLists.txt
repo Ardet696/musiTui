@@ -141,6 +141,13 @@ add_library(mp3player_core STATIC
     src/service/ConfigService.cpp
     src/service/AsyncLibraryService.cpp
     src/commands/CommandQueue.cpp
+    src/commands/CommandDispatcher.cpp
+
+    src/ipc/SocketPath.cpp
+    src/ipc/SocketIo.cpp
+    src/ipc/ControlServer.cpp
+    src/ipc/ControlClient.cpp
+    src/util/SelfPipe.cpp
 )
 mp3player_configure(mp3player_core)
 target_link_libraries(mp3player_core PUBLIC ${MP3PLAYER_SDL2_TARGET})
@@ -148,6 +155,8 @@ target_link_libraries(mp3player_core PUBLIC ${MP3PLAYER_SDL2_TARGET})
 add_executable(musiTui
     src/main.cpp
     src/App.cpp
+    src/PlayerCore.cpp
+    src/Daemon.cpp
     src/tui/ui.cpp
     src/tui/FileManager.cpp
     src/tui/ScreenRefreshTimer.cpp
@@ -162,6 +171,7 @@ add_executable(musiTui
 )
 
 mp3player_configure(musiTui)
+target_compile_definitions(musiTui PRIVATE MUSITUI_VERSION="${PROJECT_VERSION}")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(musiTui PRIVATE -pie -Wl,-z,relro,-z,now)
 endif()
@@ -214,6 +224,8 @@ if(BUILD_TESTING)
         tests/unit/SdlAudioSinkTest.cpp
         tests/unit/AsyncLibraryLoadTest.cpp
         tests/unit/OutputDeviceSwitchTest.cpp
+        tests/unit/CommandDispatcherTest.cpp
+        tests/unit/ControlServerTest.cpp
     )
 
     mp3player_add_test_suite(stress_tests

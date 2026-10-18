@@ -35,6 +35,7 @@ public:
     void nextSong() override;
     void resumePlayback() override;
     void stopPlayback() override;
+    bool isPlaying() const override;
     std::vector<float> getSpectrumBars() const override;
     std::vector<float> getSpectrumMagnitudes() const override;
     float getPlaybackProgress() const override;

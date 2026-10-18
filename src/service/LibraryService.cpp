@@ -166,6 +166,10 @@ void LibraryService::stopPlayback() {
     controller_.pause();
 }
 
+bool LibraryService::isPlaying() const {
+    return controller_.isPlaying();
+}
+
 std::vector<float> LibraryService::getSpectrumBars() const {
     return controller_.getSpectrumBars();
 }

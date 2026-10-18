@@ -33,6 +33,7 @@ public:
     std::string getCurrentSongName() const override;
     std::string getNextSongName() const override;
     int getVolume() const override;
+    bool isPlaying() const override;
     std::vector<std::string> listOutputDevices() const override;
     NotificationBus& getNotificationBus() override;
 

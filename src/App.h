@@ -3,21 +3,20 @@
 
 #include <atomic>
 #include <memory>
+#include <string>
+#include <string_view>
 
 #include <ftxui/component/app.hpp>
 #include <ftxui/component/component.hpp>
 
-#include "commands/CommandQueue.h"
-#include "events/NotificationBus.h"
-#include "library/MusicLibrary.h"
-#include "player/PlaybackController.h"
-#include "service/AsyncLibraryService.h"
-#include "service/ConfigService.h"
-#include "service/LibraryService.h"
+#include "PlayerCore.h"
+#include "commands/CommandDispatcher.h"
+#include "commands/IUiBridge.h"
+#include "ipc/ControlServer.h"
 #include "tui/ScreenRefreshTimer.h"
 #include "util/DirectoryWatcher.h"
 
-class App {
+class App : private IUiBridge {
 public:
     App();
 
@@ -29,24 +28,28 @@ public:
     int run();
 
 private:
-    void applyConfig();
+    void applyTheme(int index) override;
+    void applyVisual(int index) override;
+    void libraryChanged() override;
+    void requestQuit() override;
+
+    // Runs a socket request on the UI thread and waits for its response.
+    std::string handleRemote(std::string_view request);
+
     static int clampVisual(IConfigService& config);
 
-    NotificationBus bus_;
-    ConfigService config_;
-    MusicLibrary library_;
-    CommandQueue cmdQueue_;
-    PlaybackController controller_;
-    LibraryService service_;
-    AsyncLibraryService asyncService_;
+    PlayerCore core_;
 
     std::shared_ptr<std::atomic<bool>> reloadFlag_;
     std::shared_ptr<int> visualIndex_;
 
     ftxui::App screen_;
+    CommandDispatcher dispatcher_;
     ftxui::Component component_;
     ScreenRefreshTimer refreshTimer_;
     DirectoryWatcher dirWatcher_;
+    // Last, so it stops before anything its handler touches is destroyed.
+    ControlServer controlServer_;
 };
 
 #endif

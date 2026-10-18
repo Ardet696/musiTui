@@ -43,6 +43,9 @@ docs/*
 *.md
 !README.md
 !tests/tests.md
+# Agent instructions ship with the repo so cloned agents can drive the player
+!AGENTS.md
+!CLAUDE.md
 # User-facing install guide, unlike the rest of docs/
 !docs/INSTALL.md
 

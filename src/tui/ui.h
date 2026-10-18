@@ -7,11 +7,11 @@
 #include <memory>
 
 class ILibraryService;
-class IConfigService;
+class CommandDispatcher;
 
 ftxui::Component buildTui(
     ILibraryService& service,
-    IConfigService& config,
+    CommandDispatcher& dispatcher,
     ftxui::App& screen,
     std::shared_ptr<std::atomic<bool>> reloadFlag,
     std::shared_ptr<int> visualIndex);

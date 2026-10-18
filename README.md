@@ -53,6 +53,19 @@ The command panel works like a mini config terminal.
 
 - Direct: `play`, `stop`, `next`, `prev`, `help`, `fileHelp`
 - Interactive: `volume`, `output`, `visuals`, `themes`, `RootConfig` wait for a selection. Press `Esc` to cancel and return to normal input.
+- One-shot: `play <album> [track]`, `volume 40`, `theme Forest`, `visual 2`, `root <path>`, `status`, `albums`.
+
+## Control from scripts and agents
+
+The running player listens on a local socket, so anything that can run a shell command can drive it:
+
+```bash
+musiTui ctl play "Abbey Road" 2
+musiTui ctl volume +10
+musiTui ctl --json status
+```
+
+`musiTui --daemon` runs the player without the TUI. Coding agents (Claude Code, Codex, Cursor, ...) pick up the full reference from [AGENTS.md](AGENTS.md).
 
 ## Build and run
 

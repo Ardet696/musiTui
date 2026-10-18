@@ -92,6 +92,10 @@ int AsyncLibraryService::getVolume() const {
     return real_.getVolume();
 }
 
+bool AsyncLibraryService::isPlaying() const {
+    return real_.isPlaying();
+}
+
 std::vector<std::string> AsyncLibraryService::listOutputDevices() const {
     return real_.listOutputDevices();
 }
